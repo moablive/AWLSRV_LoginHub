@@ -1,0 +1,1032 @@
+CONSOLIDAÇÃO DE PROJETO: AWLSRV_LoginHub
+================================================================================
+
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/README.md
+====================
+# 🗄️ AWLSRV Login Hub
+
+Sistema centralizado de autenticação multi-tenant e gateway de permissões.
+
+<p align="center">
+  <a href="https://skillicons.dev">
+    <img src="https://skillicons.dev/icons?i=ts,nodejs,express,postgres,docker,nginx" />
+  </a>
+</p>
+
+---
+
+## 🏗️ Estrutura do Projeto
+
+O sistema segue uma arquitetura **Service-Repository** para robustez e escalabilidade:
+
+- **`src/controllers`**: Gerencia requisições HTTP (Entrada/Saída).
+- **`src/services`**: Regras de negócio, validações e Criptografia (Bcrypt/JWT).
+- **`src/db`**: Comandos SQL puros e conexão com Banco.
+- **`src/routes`**: Definição de endpoints da API.
+
+# 🗄️ Login Hub - Database Schema
+
+Sistema de banco de dados para gerenciamento de autenticação multi-tenant.
+
+## 📊 Estrutura do Banco de Dados
+
+### 3 Tabelas Principais
+
+#### 1. **empresas** 
+Representa seus clientes (donos dos projetos Docker)
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| id | UUID | Identificador único |
+| nome | VARCHAR(255) | Nome da empresa |
+| documento | VARCHAR(18) | CPF ou CNPJ (único) |
+| email | VARCHAR(255) | Email de contato |
+| telefone | VARCHAR(20) | Telefone |
+| status | VARCHAR(20) | ativo / inativo |
+| data_cadastro | TIMESTAMP | Data de criação |
+| data_atualizacao | TIMESTAMP | Última atualização |
+
+#### 2. **niveis_acesso**
+Define os níveis de permissão dos usuários
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| id | UUID | Identificador único |
+| nome | VARCHAR(50) | admin / usuario |
+| descricao | TEXT | Descrição do nível |
+| data_cadastro | TIMESTAMP | Data de criação |
+
+#### 3. **usuarios**
+Usuários das empresas (quem faz login no sistema)
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| id | UUID | Identificador único |
+| empresa_id | UUID | FK para empresas |
+| nivel_acesso_id | UUID | FK para niveis_acesso |
+| nome | VARCHAR(255) | Nome completo |
+| email | VARCHAR(255) | Email (único por empresa) |
+| senha_hash | VARCHAR(255) | Senha criptografada |
+| telefone | VARCHAR(20) | Telefone |
+| status | VARCHAR(20) | ativo / inativo / bloqueado |
+| ultimo_acesso | TIMESTAMP | Último login |
+| data_cadastro | TIMESTAMP | Data de criação |
+| data_atualizacao | TIMESTAMP | Última atualização |
+
+### Relacionamentos
+
+```
+empresas (1) ──── (N) usuarios
+niveis_acesso (1) ──── (N) usuarios
+```
+
+## 🚀 Instalação
+
+### Conectar ao PostgreSQL
+```bash
+psql -U postgres
+```
+
+### Criar e Configurar o Database
+
+```sql
+-- Criar database
+CREATE DATABASE login_hub;
+
+-- Conectar ao database
+\c login_hub
+
+-- TABELA 1: EMPRESAS
+CREATE TABLE empresas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nome VARCHAR(255) NOT NULL,
+    documento VARCHAR(18) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL,
+    telefone VARCHAR(20),
+    status VARCHAR(20) DEFAULT 'ativo' CHECK (status IN ('ativo', 'inativo')),
+    data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    data_atualizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- TABELA 2: NÍVEIS DE ACESSO
+CREATE TABLE niveis_acesso (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nome VARCHAR(50) NOT NULL UNIQUE,
+    descricao TEXT,
+    data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- TABELA 3: USUÁRIOS
+CREATE TABLE usuarios (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    empresa_id UUID NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    nivel_acesso_id UUID NOT NULL REFERENCES niveis_acesso(id),
+    nome VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    senha_hash VARCHAR(255) NOT NULL,
+    telefone VARCHAR(20),
+    status VARCHAR(20) DEFAULT 'ativo' CHECK (status IN ('ativo', 'inativo', 'bloqueado')),
+    ultimo_acesso TIMESTAMP,
+    data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    data_atualizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(empresa_id, email)
+);
+
+-- ÍNDICES
+CREATE INDEX idx_usuarios_empresa ON usuarios(empresa_id);
+CREATE INDEX idx_usuarios_email ON usuarios(email);
+CREATE INDEX idx_empresas_documento ON empresas(documento);
+
+-- FUNCTION E TRIGGERS
+CREATE OR REPLACE FUNCTION atualizar_data_atualizacao()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.data_atualizacao = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_atualizar_empresas
+    BEFORE UPDATE ON empresas
+    FOR EACH ROW
+    EXECUTE FUNCTION atualizar_data_atualizacao();
+
+CREATE TRIGGER trigger_atualizar_usuarios
+    BEFORE UPDATE ON usuarios
+    FOR EACH ROW
+    EXECUTE FUNCTION atualizar_data_atualizacao();
+
+-- DADOS INICIAIS
+INSERT INTO niveis_acesso (nome, descricao) VALUES
+    ('admin', 'Administrador com acesso total'),
+    ('usuario', 'Usuário padrão com acesso limitado');
+```
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/package.json
+====================
+{
+  "name": "awlsrv_loginhub",
+  "version": "1.0.0",
+  "description": "Sistema de banco de dados para gerenciamento de autenticação multi-tenant.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moablive/AWLSRV_LoginHub.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/moablive/AWLSRV_LoginHub/issues"
+  },
+  "homepage": "https://github.com/moablive/AWLSRV_LoginHub#readme",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^25.0.6",
+    "@types/pg": "^8.16.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3"
+  }
+}
+
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/.env
+====================
+# PORTA DA API (Interna do container)
+PORT=3000
+
+# BANCO DE DADOS (Conexão via Rede Docker Interna awl_network)
+DB_HOST=awlsrvDB_postgres
+DB_PORT=5432
+DB_NAME=login_hub
+DB_USER=admin_root
+# Mantenha as aspas simples devido aos caracteres especiais ($)
+DB_PASS='MGD99B8stebzG#PcwQBpQ!tvWzYfHSjcaR$ep6U8xh'
+
+# SEGURANÇA (JWT)
+JWT_SECRET='m?6IWoQ:<@8>oIzo{.^4<|Ae>kGC!pnn'
+
+
+# Senha Mestra para o Painel Admin
+MASTER_API_KEY='M?u@+Ok3@5ze6j1m:(w*Ras&b}{}s6()'
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/tsconfig.json
+====================
+{
+  "compilerOptions": {
+    // File Layout
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    // Environment Settings
+    // Mudamos para commonjs para funcionar com o padrão do Node sem a complexidade de .mjs
+    "module": "commonjs",
+    "target": "es2022", 
+    "moduleResolution": "node",
+    
+    // Configurações de Tipos para Node
+    "lib": ["es2022"],
+    "types": ["node"],
+
+    // Interoperabilidade (CRUCIAL PARA EXPRESS/PG)
+    // Permite usar "import express from 'express'" mesmo que a lib use "module.exports"
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+
+    // A CORREÇÃO DO ERRO QUE VOCÊ ESTAVA TENDO
+    // false = permite que o TS converta 'import' para 'require' automaticamente
+    "verbatimModuleSyntax": false,
+
+    // Other Outputs
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+
+    // Stricter Typechecking Options
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    // Style Options
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    
+    // Removemos "jsx" pois é uma API Backend, não React.
+    "isolatedModules": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/index.ts
+====================
+import express, { Request, Response, NextFunction } from 'express';
+import dotenv from 'dotenv';
+import { corsMiddleware } from './middlewares/corsMiddleware';
+import routes from './routes';
+
+dotenv.config();
+
+const app = express();
+
+// --- CONFIGURAÇÕES GLOBAIS ---
+app.use(corsMiddleware);
+app.use(express.json());
+
+// --- ROTAS (Centralizadas) ---
+app.use('/api', routes);
+
+// --- TRATAMENTO DE ERROS ---
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+    console.error('❌ Erro não tratado:', err);
+    res.status(500).json({ error: 'Erro interno do servidor.' });
+});
+
+// --- INICIALIZAÇÃO ---
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+    console.log(`🔥 Servidor rodando na porta ${PORT}`);
+    console.log(`🛡️  API pronta para uso em http://localhost:${PORT}/api`);
+});
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/types/express.d.ts
+====================
+// src/types/express.d.ts
+import { JWTPayload } from './dtos/auth.dto';
+
+declare global {
+    namespace Express {
+        interface Request {
+            user?: JWTPayload;
+        }
+    }
+}
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/types/dtos/empresa.dto.ts
+====================
+// 1. INPUTS (Frontend -> API)
+
+/**
+ * DTO para o fluxo de Onboarding:
+ * Cria a empresa e, automaticamente, cria o primeiro usuário (Dono/Admin).
+ */
+export interface CreateEmpresaComAdminDTO {
+    // --- Dados da Empresa ---
+    empresa_nome: string;
+    empresa_documento: string; // CNPJ ou CPF (sem formatação preferencialmente)
+    empresa_telefone: string;  // Importante para contato
+    empresa_email?: string;    // Email genérico da empresa (ex: contato@empresa.com)
+    empresa_dominio?: string;  // Slug para subdomínio (ex: 'cliente-a')
+
+    // --- Dados do Admin Inicial ---
+    admin_nome: string;
+    admin_email: string;
+    admin_senha: string;       // Senha plana (será hashada no Service)
+    admin_telefone?: string;   // WhatsApp/Celular do dono
+}
+
+// 2. OUTPUTS (API -> Frontend)
+
+/**
+ * Resposta simples após criar a empresa.
+ */
+export interface EmpresaCreatedDTO {
+    message: string;
+    empresaId: string;
+    adminEmail: string;
+}
+
+/**
+ * Usado em listagens (Dropdowns, Tabelas de Admin).
+ */
+export interface EmpresaSummaryDTO {
+    id: string;
+    nome: string;
+    documento: string;
+    status: 'ativa' | 'inativa' | 'bloqueada';
+    dominio?: string;
+}
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/types/dtos/auth.dto.ts
+====================
+// src/types/dtos/auth.dto.ts
+
+
+export interface LoginInputDTO {
+    email: string;
+    senha_plana: string;
+}
+
+
+export interface UserLoginQueryResult {
+    id: string;
+    nome: string;
+    email: string;
+    senha_hash: string;
+    user_status: string;
+    empresa_id: string;
+    empresa_status: string;
+    empresa_nome: string;
+    role: string; // Ex: 'admin' | 'usuario'
+}
+
+
+export interface JWTPayload {
+    sub: string;        // ID do usuário (Padrão JWT é 'sub' de Subject)
+    email: string;
+    empresaId: string;
+    role: string;
+    iat?: number;       // Issued At (Gerado autom pelo JWT)
+    exp?: number;       // Expiration (Gerado autom pelo JWT)
+}
+
+export interface LoginResponseDTO {
+    token: string;
+    expiresIn: number; // Segundos
+    usuario: {
+        id: string;
+        nome: string;
+        email: string;
+        role: string;
+        // Não retornamos senha, hash, nem datas desnecessárias aqui
+    };
+    empresa: {
+        id: string;
+        nome: string;
+        status: string;
+    };
+}
+
+export interface CreateUserDTO {
+    empresa_id: string; // O Admin precisa dizer para qual empresa é (se for SuperAdmin) ou pegamos do token
+    nome: string;
+    email: string;
+    password: string; // Senha inicial
+    role: string; // 'admin' | 'usuario'
+    telefone?: string;
+}
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/types/domain/usuario.domain.ts
+====================
+export interface Usuario {
+    id: string; // UUID
+    empresa_id: string; // FK
+    nivel_acesso_id?: string; // FK (ou string fixa dependendo da sua lógica atual)
+    nome: string;
+    email: string;
+    senha_hash: string; // Nunca retornar isso no DTO!
+    telefone?: string;
+    status: 'ativo' | 'inativo' | 'bloqueado';
+    ultimo_acesso?: Date;
+    created_at: Date;
+}
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/types/domain/empresa.domain.ts
+====================
+export interface Empresa {
+    id: string; // UUID
+    nome: string;
+    documento: string; // CNPJ ou CPF
+    dominio?: string; // Slug para subdomínio
+    status: 'ativa' | 'inativa' | 'bloqueada';
+    created_at: Date;
+    updated_at: Date;
+}
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/middlewares/corsMiddleware.ts
+====================
+import cors, { CorsOptions } from 'cors';
+
+// Lista de domínios permitidos explicitamente
+const ALLOWED_ORIGINS = [
+    'https://astralwavelabel.com',
+    'https://www.astralwavelabel.com'
+];
+
+const corsOptions: CorsOptions = {
+    origin: (origin, callback) => {
+        // 1. Permitir requisições sem 'origin' (Postman, cURL, Server-to-Server)
+        if (!origin) {
+            return callback(null, true);
+        }
+
+        // 2. Permitir Localhost (Desenvolvimento)
+        if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
+            return callback(null, true);
+        }
+
+        // 3. Permitir Domínios da Whitelist (Produção)
+        if (ALLOWED_ORIGINS.includes(origin)) {
+            return callback(null, true);
+        }
+
+        // 4. Bloquear resto
+        return callback(new Error('Bloqueado por CORS: Origem não permitida.'));
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    
+    allowedHeaders: [
+        'Content-Type', 
+        'Authorization', 
+        'x-master-key'
+    ], 
+    
+    credentials: true,
+    optionsSuccessStatus: 200
+};
+
+export const corsMiddleware = cors(corsOptions);
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/middlewares/adminMiddleware.ts
+====================
+import { Request, Response, NextFunction } from 'express';
+
+export const adminMiddleware = (req: Request, res: Response, next: NextFunction) => {
+    // 1. Segurança: Carrega a chave do ambiente
+    const validKey = process.env.MASTER_API_KEY;
+
+    // Se o servidor estiver mal configurado (sem chave no .env), NINGUÉM entra.
+    // Isso evita que o sistema fique aberto por acidente.
+    if (!validKey) {
+        console.error('❌ ERRO CRÍTICO: MASTER_API_KEY não definida no .env');
+        return res.status(500).json({ 
+            error: 'Erro interno de segurança.',
+            message: 'O servidor não está configurado corretamente.'
+        });
+    }
+
+    // 2. Captura o header (garantindo que seja string, pois pode vir array)
+    const headerValue = req.headers['x-master-key'];
+    const apiKey = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+
+    // 3. Validação
+    if (!apiKey || apiKey !== validKey) {
+        // Log opcional para auditoria (quem tentou invadir?)
+        // console.warn(`Tentativa de acesso não autorizado IP: ${req.ip}`);
+        
+        return res.status(403).json({ 
+            error: 'Acesso negado',
+            message: 'Chave Mestra inválida ou ausente.' 
+        });
+    }
+
+    next();
+};
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/db/db.ts
+====================
+import { Pool } from 'pg';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const pool = new Pool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database: process.env.DB_NAME,
+    port: parseInt(process.env.DB_PORT || '5432'),
+});
+
+pool.on('connect', () => {
+    console.log('📦 Conectado ao PostgreSQL (LoginHub)');
+});
+
+export default pool;
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/db/queries/usuario.queries.ts
+====================
+export const UsuarioQueries = {
+    // Busca usuário pelo e-mail (usado no Login)
+    FIND_BY_EMAIL: `
+        SELECT u.*, e.nome as empresa_nome, e.status as empresa_status
+        FROM usuarios u
+        JOIN empresas e ON u.empresa_id = e.id
+        WHERE u.email = $1
+    `,
+
+    // Cria um novo usuário
+    CREATE: `
+        INSERT INTO usuarios (
+            empresa_id, 
+            nivel_acesso_id, 
+            nome, 
+            email, 
+            senha_hash, 
+            telefone
+        ) VALUES ($1, (SELECT id FROM niveis_acesso WHERE slug = $2), $3, $4, $5, $6)
+        RETURNING id, nome, email;
+    `,
+
+    // Atualiza último acesso
+    UPDATE_LAST_LOGIN: `
+        UPDATE usuarios SET ultimo_acesso = NOW() WHERE id = $1
+    `
+};
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/db/queries/empresa.queries.ts
+====================
+export const EmpresaQueries = {
+    // Cria empresa e retorna ID
+    CREATE: `
+        INSERT INTO empresas (nome, documento, dominio)
+        VALUES ($1, $2, $3)
+        RETURNING id;
+    `,
+
+    // Verifica se documento já existe
+    CHECK_EXISTS: `
+        SELECT id FROM empresas WHERE documento = $1 LIMIT 1;
+    `
+};
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/db/queries/auth.queries.ts
+====================
+export const AuthQueries = {
+    
+    /**
+     * Busca usuário pelo email para o Login.
+     * Traz dados cruciais: 
+     * - Hash da senha (para comparar)
+     * - Status da empresa (para bloquear login se empresa estiver inativa)
+     * - Slug do nível de acesso (ex: 'admin', 'user') para montar o Payload do Token
+     */
+    FIND_BY_EMAIL: `
+        SELECT 
+            u.id,
+            u.nome,
+            u.email,
+            u.senha_hash,
+            u.status as usuario_status,
+            u.empresa_id,
+            e.nome as empresa_nome,
+            e.status as empresa_status,
+            n.slug as role,
+            n.permissoes
+        FROM usuarios u
+        JOIN empresas e ON u.empresa_id = e.id
+        JOIN niveis_acesso n ON u.nivel_acesso_id = n.id
+        WHERE u.email = $1
+        LIMIT 1;
+    `,
+
+    /**
+     * Cria um novo usuário.
+     * OBS: O 2º parâmetro ($2) espera o SLUG do nível (ex: 'admin'),
+     * e a subquery busca o ID correspondente na tabela niveis_acesso automaticamente.
+     */
+    CREATE_USER: `
+        INSERT INTO usuarios (
+            empresa_id,
+            nivel_acesso_id,
+            nome,
+            email,
+            senha_hash,
+            telefone
+        ) VALUES (
+            $1, 
+            (SELECT id FROM niveis_acesso WHERE slug = $2 LIMIT 1), 
+            $3, 
+            $4, 
+            $5, 
+            $6
+        )
+        RETURNING id, nome, email, created_at;
+    `,
+
+    /**
+     * Atualiza a data do último login para auditoria.
+     */
+    UPDATE_LAST_LOGIN: `
+        UPDATE usuarios 
+        SET ultimo_acesso = CURRENT_TIMESTAMP 
+        WHERE id = $1;
+    `,
+
+    /**
+     * Verifica se o email já existe dentro daquela empresa 
+     * (considerando que o UNIQUE no banco é empresa_id + email)
+     */
+    CHECK_EMAIL_EXISTS: `
+        SELECT id FROM usuarios 
+        WHERE email = $1 AND empresa_id = $2
+        LIMIT 1;
+    `
+};
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/controllers/adminController.ts
+====================
+import { Request, Response } from 'express';
+import { AdminService } from '../services/adminService';
+// Importamos os DTOs para tipar o Body da requisição
+import { CreateEmpresaComAdminDTO } from '../types/dtos/empresa.dto';
+import { CreateUserDTO } from '../types/dtos/auth.dto';
+
+// Instância Singleton do Service
+const adminService = new AdminService();
+
+export class AdminController {
+
+    /**
+     * POST /companies
+     * Cria uma nova Empresa + Usuário Admin (Onboarding)
+     */
+    static async createCompany(req: Request<{}, {}, CreateEmpresaComAdminDTO>, res: Response) {
+        try {
+            // O TypeScript agora sabe que req.body tem: empresa_nome, admin_email, etc.
+            const result = await adminService.registerCompany(req.body);
+            
+            return res.status(201).json(result);
+
+        } catch (error: any) {
+            console.error('Erro em createCompany:', error);
+
+            // Tratamento de Erro: Duplicidade (Postgres Error 23505)
+            // Geralmente ocorre se o CNPJ ou Email já existem no banco
+            if (error.code === '23505') {
+                return res.status(409).json({ 
+                    error: 'Conflito de Dados',
+                    message: 'Já existe uma empresa com este documento ou um usuário com este e-mail.' 
+                });
+            }
+
+            return res.status(500).json({ 
+                error: 'Erro Interno', 
+                message: 'Falha ao processar o registro da empresa.' 
+            });
+        }
+    }
+
+    /**
+     * POST /users
+     * Adiciona um usuário secundário em uma empresa existente
+     */
+    static async addUser(req: Request<{}, {}, CreateUserDTO>, res: Response) {
+        try {
+            await adminService.addUser(req.body);
+            
+            return res.status(201).json({ message: 'Usuário criado com sucesso.' });
+
+        } catch (error: any) {
+            console.error('Erro em addUser:', error);
+
+            // Tratamento de Erro: Duplicidade de Email na mesma empresa
+            if (error.code === '23505') {
+                return res.status(409).json({ 
+                    error: 'Conflito de Dados',
+                    message: 'Este e-mail já está cadastrado.' 
+                });
+            }
+
+            return res.status(500).json({ 
+                error: 'Erro Interno',
+                message: 'Não foi possível adicionar o usuário.' 
+            });
+        }
+    }
+}
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/controllers/authController.ts
+====================
+import { Request, Response } from 'express';
+import { AuthService } from '../services/authService';
+import { LoginInputDTO } from '../types/dtos/auth.dto';
+
+const authService = new AuthService();
+
+export class AuthController {
+
+    /**
+     * POST /auth/login
+     */
+    static async login(req: Request<{}, {}, LoginInputDTO>, res: Response) {
+        try {
+            const { email, senha_plana } = req.body;
+
+            // Validação básica se esqueceu de mandar campos
+            if (!email || !senha_plana) {
+                return res.status(400).json({ error: 'E-mail e senha são obrigatórios.' });
+            }
+
+            const result = await authService.login(req.body);
+            
+            return res.status(200).json(result);
+
+        } catch (error: any) {
+            console.error('Erro no Login:', error.message);
+
+            // Tratamento de Erros Personalizados
+            switch (error.message) {
+                case 'CREDENCIAIS_INVALIDAS':
+                    return res.status(401).json({ error: 'E-mail ou senha incorretos.' });
+                
+                case 'EMPRESA_BLOQUEADA':
+                    return res.status(403).json({ error: 'O acesso da sua empresa está suspenso.' });
+
+                case 'USUARIO_BLOQUEADO':
+                    return res.status(403).json({ error: 'Seu usuário está inativo.' });
+
+                default:
+                    return res.status(500).json({ error: 'Erro interno no servidor.' });
+            }
+        }
+    }
+}
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/routes/adminRoutes.ts
+====================
+// src/routes/admin.routes.ts
+import { Router } from 'express';
+import { AdminController } from '../controllers/adminController';
+import { adminMiddleware } from '../middlewares/adminMiddleware';
+
+const router = Router();
+
+router.use(adminMiddleware);
+
+
+router.post('/companies', AdminController.createCompany);
+router.post('/users', AdminController.addUser);
+
+export default router;
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/routes/authRoutes.ts
+====================
+import { Router } from 'express';
+import { AuthController } from '../controllers/authController';
+
+const router = Router();
+
+// POST /api/auth/login
+router.post('/login', AuthController.login);
+
+// Futuro: Rota de refresh token ou logout ficaria aqui
+// router.post('/refresh', AuthController.refreshToken);
+
+export default router;
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/routes/index.ts
+====================
+import { Router, Request, Response } from 'express';
+import authRoutes from './authRoutes'; 
+import adminRoutes from './adminRoutes'; 
+
+const routes = Router();
+
+// --- Health Check (Para monitoramento) ---
+routes.get('/', (req: Request, res: Response) => {
+    res.status(200).json({
+        status: 'online',
+        service: 'AWLSRV LoginHub',
+        version: '1.0.0',
+        message: '🚀 Sistema operante e protegido.',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// --- Definição das Rotas ---
+
+// Rotas Públicas (Login)
+routes.use('/auth', authRoutes);
+
+// Rotas Administrativas (Protegidas por Master Key ou Token)
+routes.use('/admin', adminRoutes);
+
+export default routes;
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/services/authService.ts
+====================
+import bcrypt from 'bcryptjs'; 
+import jwt from 'jsonwebtoken';
+import pool from '../db/db'; 
+import { AuthQueries } from '../db/queries/auth.queries';
+import { LoginInputDTO, LoginResponseDTO, UserLoginQueryResult, JWTPayload } from '../types/dtos/auth.dto';
+
+export class AuthService {
+    
+    // Método de Login fortemente tipado
+    public async login(data: LoginInputDTO): Promise<LoginResponseDTO> {
+        
+        // 1. Busca no Banco (Traz Usuário + Empresa + Role)
+        const result = await pool.query(AuthQueries.FIND_BY_EMAIL, [data.email]);
+        
+        // Dica de segurança: Não diga "Usuário não encontrado", diga "Credenciais inválidas"
+        if (result.rows.length === 0) {
+            throw new Error('CREDENCIAIS_INVALIDAS');
+        }
+
+        const user: UserLoginQueryResult = result.rows[0];
+
+        // 2. Verifica Status da Empresa e Usuário
+        if (user.empresa_status !== 'ativa') {
+            throw new Error('EMPRESA_BLOQUEADA');
+        }
+        if (user.user_status !== 'ativo') {
+            throw new Error('USUARIO_BLOQUEADO');
+        }
+
+        // 3. Valida Senha
+        const senhaValida = await bcrypt.compare(data.senha_plana, user.senha_hash);
+        if (!senhaValida) {
+            throw new Error('CREDENCIAIS_INVALIDAS');
+        }
+
+        // 4. Gera o Token JWT
+        const payload: JWTPayload = {
+            sub: user.id,
+            email: user.email,
+            empresaId: user.empresa_id,
+            role: user.role
+        };
+
+        const token = jwt.sign(payload, process.env.JWT_SECRET as string, {
+            expiresIn: '8h' // Expiração do token
+        });
+
+        // 5. Retorna o DTO Limpo (Sem senha hash)
+        return {
+            token,
+            expiresIn: 28800, // 8h em segundos
+            usuario: {
+                id: user.id,
+                nome: user.nome,
+                email: user.email,
+                role: user.role
+            },
+            empresa: {
+                id: user.empresa_id,
+                nome: user.empresa_nome,
+                status: user.empresa_status
+            }
+        };
+    }
+}
+
+====================
+📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/services/adminService.ts
+====================
+import bcrypt from 'bcryptjs'; 
+import pool from '../db/db'; 
+import { AuthQueries } from '../db/queries/auth.queries';
+import { EmpresaQueries } from '../db/queries/empresa.queries';
+import { CreateEmpresaComAdminDTO, EmpresaCreatedDTO } from '../types/dtos/empresa.dto';
+import { CreateUserDTO } from '../types/dtos/auth.dto';
+
+export class AdminService {
+
+    /**
+     * 1. Onboarding: Cria Empresa + Usuário Admin em uma transação atômica.
+     */
+    public async registerCompany(data: CreateEmpresaComAdminDTO): Promise<EmpresaCreatedDTO> {
+        const client = await pool.connect();
+        
+        try {
+            await client.query('BEGIN'); // --- INÍCIO DA TRANSAÇÃO ---
+
+            // A. Cria a Empresa
+            // OBS: Certifique-se que sua EmpresaQueries.CREATE espera estes parâmetros na ordem correta.
+            const companyRes = await client.query(EmpresaQueries.CREATE, [
+                data.empresa_nome,
+                data.empresa_documento,
+                data.empresa_telefone
+                // Se sua query aceitar dominio/email, adicione aqui: data.empresa_dominio, etc.
+            ]);
+            
+            const empresaId = companyRes.rows[0].id;
+
+            // B. Gera Hash da Senha do Admin
+            const salt = await bcrypt.genSalt(10);
+            const passwordHash = await bcrypt.hash(data.admin_senha, salt);
+
+            // C. Cria o Usuário Admin (Dono) vinculado à empresa
+            // A query AuthQueries.CREATE_USER espera: [empresa_id, role_slug, nome, email, senha, telefone]
+            await client.query(AuthQueries.CREATE_USER, [
+                empresaId,
+                'admin', // Role fixa para o criador da empresa
+                data.admin_nome,
+                data.admin_email,
+                passwordHash,
+                data.admin_telefone
+            ]);
+
+            await client.query('COMMIT'); // --- SUCESSO ---
+
+            return { 
+                message: 'Empresa e Admin criados com sucesso!', 
+                empresaId,
+                adminEmail: data.admin_email
+            };
+
+        } catch (error) {
+            await client.query('ROLLBACK'); // --- DESFAZ TUDO SE DER ERRO ---
+            throw error; // Repassa o erro para o Controller tratar
+        } finally {
+            client.release(); // Devolve a conexão para o pool
+        }
+    }
+
+    /**
+     * 2. Adicionar Usuário Normal em Empresa Existente
+     */
+    public async addUser(data: CreateUserDTO): Promise<void> {
+        // Validação extra: Se a empresa não vier preenchida (caso não tratada no controller)
+        if (!data.empresa_id) {
+            throw new Error('ID da empresa é obrigatório para criar usuário.');
+        }
+
+        // Gera Hash
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(data.password, salt);
+
+        // Insere usando a Query isolada
+        await pool.query(AuthQueries.CREATE_USER, [
+            data.empresa_id,
+            data.role, // 'admin' ou 'usuario'
+            data.nome,
+            data.email,
+            passwordHash,
+            data.telefone
+        ]);
+    }
+}

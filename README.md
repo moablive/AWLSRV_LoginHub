@@ -1,3 +1,24 @@
+# 🗄️ AWLSRV Login Hub
+
+Sistema centralizado de autenticação multi-tenant e gateway de permissões.
+
+<p align="center">
+  <a href="https://skillicons.dev">
+    <img src="https://skillicons.dev/icons?i=ts,nodejs,express,postgres,docker,nginx" />
+  </a>
+</p>
+
+---
+
+## 🏗️ Estrutura do Projeto
+
+O sistema segue uma arquitetura **Service-Repository** para robustez e escalabilidade:
+
+- **`src/controllers`**: Gerencia requisições HTTP (Entrada/Saída).
+- **`src/services`**: Regras de negócio, validações e Criptografia (Bcrypt/JWT).
+- **`src/db`**: Comandos SQL puros e conexão com Banco.
+- **`src/routes`**: Definição de endpoints da API.
+
 # 🗄️ Login Hub - Database Schema
 
 Sistema de banco de dados para gerenciamento de autenticação multi-tenant.
@@ -135,124 +156,3 @@ INSERT INTO niveis_acesso (nome, descricao) VALUES
     ('admin', 'Administrador com acesso total'),
     ('usuario', 'Usuário padrão com acesso limitado');
 ```
-
-## 💻 Exemplos de Uso
-
-### Cadastrar Empresa
-
-```sql
-INSERT INTO empresas (nome, documento, email, telefone) 
-VALUES (
-    'Padaria Boa Massa',
-    '12.345.678/0001-90',
-    'contato@boamassa.com',
-    '(11) 98765-4321'
-)
-RETURNING id;
-```
-
-### Cadastrar Usuário Admin
-
-```sql
-INSERT INTO usuarios (empresa_id, nivel_acesso_id, nome, email, senha_hash, telefone)
-VALUES (
-    'UUID_DA_EMPRESA',
-    (SELECT id FROM niveis_acesso WHERE nome = 'admin'),
-    'João Pedro',
-    'joao@boamassa.com',
-    '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
-    '(11) 91234-5678'
-);
-```
-
-### Cadastro Simplificado (Empresa + Admin)
-
-```sql
-WITH nova_empresa AS (
-    INSERT INTO empresas (nome, documento, email, telefone) 
-    VALUES (
-        'Academia FitLife',
-        '33.444.555/0001-66',
-        'contato@fitlife.com',
-        '(31) 99999-8888'
-    )
-    RETURNING id
-)
-INSERT INTO usuarios (empresa_id, nivel_acesso_id, nome, email, senha_hash, telefone)
-SELECT 
-    nova_empresa.id,
-    (SELECT id FROM niveis_acesso WHERE nome = 'admin'),
-    'Ricardo Pereira',
-    'ricardo@fitlife.com',
-    '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
-    '(31) 98888-7777'
-FROM nova_empresa;
-```
-
-## 🔍 Queries Úteis
-
-### Listar todas as empresas
-
-```sql
-SELECT id, nome, documento, email, status 
-FROM empresas
-ORDER BY nome;
-```
-
-### Listar usuários de uma empresa
-
-```sql
-SELECT 
-    u.nome,
-    u.email,
-    na.nome as nivel_acesso,
-    u.status,
-    u.ultimo_acesso
-FROM usuarios u
-INNER JOIN niveis_acesso na ON u.nivel_acesso_id = na.id
-WHERE u.empresa_id = 'UUID_DA_EMPRESA'
-ORDER BY na.nome DESC, u.nome;
-```
-
-### Resumo de empresas
-
-```sql
-SELECT 
-    e.nome as empresa,
-    e.documento,
-    COUNT(u.id) as total_usuarios,
-    COUNT(CASE WHEN na.nome = 'admin' THEN 1 END) as admins,
-    COUNT(CASE WHEN na.nome = 'usuario' THEN 1 END) as usuarios_comuns
-FROM empresas e
-LEFT JOIN usuarios u ON e.id = u.empresa_id
-LEFT JOIN niveis_acesso na ON u.nivel_acesso_id = na.id
-GROUP BY e.id, e.nome, e.documento
-ORDER BY e.nome;
-```
-
-### Buscar usuário para login
-
-```sql
-SELECT 
-    u.id,
-    u.nome,
-    u.email,
-    u.senha_hash,
-    u.status,
-    e.id as empresa_id,
-    e.nome as empresa_nome,
-    na.nome as nivel_acesso
-FROM usuarios u
-INNER JOIN empresas e ON u.empresa_id = e.id
-INNER JOIN niveis_acesso na ON u.nivel_acesso_id = na.id
-WHERE u.email = 'joao@boamassa.com'
-AND u.status = 'ativo'
-AND e.status = 'ativo';
-```
-
-## 📝 Notas
-
-- **UUIDs**: Chaves primárias usam UUID
-- **Email único por empresa**: Mesmo email pode existir em empresas diferentes
-- **Cascade Delete**: Deletar empresa remove todos os usuários
-- **Timestamps**: Criação e atualização automáticas

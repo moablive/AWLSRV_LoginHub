@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  login-hub:
+    container_name: awlsrv_login_hub
+    build: .
+    restart: always
+    
+    # Mapeamento de Portas
+    # O primeiro valor é a porta no Host (Servidor)
+    # O segundo é a porta interna no Container (Node.js)
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}" 
+    
+    # 1. Carrega TODAS as variáveis do arquivo .env
+    # Isso traz: DB_PASS, JWT_SECRET, MASTER_API_KEY
+    env_file:
+      - .env
+
+    # 2. Sobrescreve configurações específicas para o DOCKER
+    environment:
+      # --- O GATILHO DA LÓGICA (Ativa o modo LoginDocker) ---
+      - IS_DOCKER=true
+      
+      # Configuração de Ambiente
+      - NODE_ENV=production
+      
+      # Conexão de Banco (Rede Interna)
+      - DB_HOST=awlsrvDB_postgres
+      - DB_PORT=5432
+      # Forçamos o nome e usuário corretos para garantir integridade
+      - DB_NAME=login_hub
+      - DB_USER=admin_root
+      
+      # Porta Interna do Node
+      - PORT=3000
+
+    # 3. Monitoramento de Saúde (Health Check)
+    # Garante que o container reinicie se a API travar
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    networks:
+      - awl_network
+
+# Definição de Rede
+# Assume que você já criou a rede: docker network create awl_network
+networks:
+  awl_network:
+    external: true
