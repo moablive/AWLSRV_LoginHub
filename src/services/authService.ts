@@ -62,4 +62,21 @@ export class AuthService {
             }
         };
     }
+
+    /**
+     * Realiza o Logout (Lógica de Negócio)
+     * No futuro, aqui entra a adição do token em uma Blacklist (Redis)
+     */
+    public async logout(token: string | undefined): Promise<void> {
+        // Se quiséssemos invalidar o token antes do tempo (Blacklist), faríamos aqui.
+        // Por enquanto, apenas confirmamos a ação.
+        if (!token) {
+            // Opcional: Lançar erro ou ignorar
+            return;
+        }
+        
+        // Exemplo de Log (Auditoria)
+        // console.log(`[AUTH] Token deslogado: ${token.slice(0, 10)}...`);
+        return;
+    }
 }

@@ -6,7 +6,7 @@ const router = Router();
 // POST /api/auth/login
 router.post('/login', AuthController.login);
 
-// Futuro: Rota de refresh token ou logout ficaria aqui
-// router.post('/refresh', AuthController.refreshToken);
+// POST /api/auth/logout
+router.post('/logout', AuthController.logout);
 
 export default router;

@@ -171,18 +171,29 @@ INSERT INTO niveis_acesso (nome, descricao) VALUES
   "name": "awlsrv_loginhub",
   "version": "1.0.0",
   "description": "Sistema de banco de dados para gerenciamento de autenticação multi-tenant.",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "clean": "rimraf dist",
+    "prebuild": "npm run clean",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "lint": "tsc --noEmit"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/moablive/AWLSRV_LoginHub.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "auth",
+    "multi-tenant",
+    "express",
+    "typescript"
+  ],
+  "author": "Astral Wave Label",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
@@ -190,45 +201,46 @@ INSERT INTO niveis_acesso (nome, descricao) VALUES
   },
   "homepage": "https://github.com/moablive/AWLSRV_LoginHub#readme",
   "dependencies": {
-    "bcryptjs": "^3.0.3",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
-    "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.3",
-    "pg": "^8.16.3"
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "^25.0.6",
-    "@types/pg": "^8.16.0",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.11.24",
+    "@types/pg": "^8.11.2",
+    "rimraf": "^5.0.5",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.3.3"
   }
 }
-
 
 ====================
 📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/.env
 ====================
-# PORTA DA API (Interna do container)
+# --- SERVIDOR API ---
 PORT=3000
+NODE_ENV=development
 
-# BANCO DE DADOS (Conexão via Rede Docker Interna awl_network)
-DB_HOST=awlsrvDB_postgres
-DB_PORT=5432
+# --- BANCO DE DADOS (Configuração Padrão: MAC / EXTERNO) ---
+# O Mac usará este endereço. 
+# O Docker ignorará estas linhas e usará a rede interna automaticamente.
+DB_HOST=docker-home-cloud.duckdns.org
+DB_PORT=9432
+
+# --- CREDENCIAIS (Comuns para ambos) ---
 DB_NAME=login_hub
 DB_USER=admin_root
-# Mantenha as aspas simples devido aos caracteres especiais ($)
 DB_PASS='MGD99B8stebzG#PcwQBpQ!tvWzYfHSjcaR$ep6U8xh'
 
-# SEGURANÇA (JWT)
+# --- SEGURANÇA (JWT & ADMIN) ---
 JWT_SECRET='m?6IWoQ:<@8>oIzo{.^4<|Ae>kGC!pnn'
-
-
-# Senha Mestra para o Painel Admin
 MASTER_API_KEY='M?u@+Ok3@5ze6j1m:(w*Ras&b}{}s6()'
 
 ====================
@@ -547,21 +559,58 @@ export const adminMiddleware = (req: Request, res: Response, next: NextFunction)
 ====================
 📂 ARQUIVO: /Users/moab/Documents/DEV/NODE/AWLSRV_LoginHub/src/db/db.ts
 ====================
-import { Pool } from 'pg';
+import { Pool, PoolConfig } from 'pg';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const pool = new Pool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASS,
-    database: process.env.DB_NAME,
-    port: parseInt(process.env.DB_PORT || '5432'),
-});
+// Verifica se estamos rodando dentro do Docker
+const isDocker = process.env.IS_DOCKER === 'true';
+
+let dbConfig: PoolConfig;
+
+// Fallback de segurança para o nome do banco (igual ao .env)
+const dbName = process.env.DB_NAME || 'login_hub'; 
+const dbUser = process.env.DB_USER || 'admin_root';
+
+if (isDocker) {
+    // --- MODO DOCKER (Rede Interna) ---
+    // Zero latência, comunicação direta container-a-container
+    console.log('🐳 DETECTADO AMBIENTE: DOCKER (LoginDocker - Rede Interna)');
+    dbConfig = {
+        host: 'awlsrvDB_postgres', // Nome fixo do serviço no Docker
+        port: 5432,                // Porta interna padrão do Postgres
+        user: dbUser,
+        password: process.env.DB_PASS, // Obrigatório
+        database: dbName,
+    };
+} else {
+    // --- MODO MAC (Acesso Externo via DDNS) ---
+    // Conexão via Internet (DDNS) -> Modem -> Porta 9432 -> Servidor
+    console.log('🍎 DETECTADO AMBIENTE: MAC/LOCAL (LoginMac - Acesso Remoto)');
+    dbConfig = {
+        host: process.env.DB_HOST || 'docker-home-cloud.duckdns.org',
+        port: parseInt(process.env.DB_PORT || '9432'), // Porta externa do Modem
+        user: dbUser,
+        password: process.env.DB_PASS, // Obrigatório
+        database: dbName,
+        // Dica Pro: Aumenta um pouco o timeout para conexões externas via internet
+        connectionTimeoutMillis: 5000, 
+    };
+}
+
+// Cria o Pool de conexões
+const pool = new Pool(dbConfig);
 
 pool.on('connect', () => {
-    console.log('📦 Conectado ao PostgreSQL (LoginHub)');
+    const ambiente = isDocker ? 'INTERNO (Docker)' : 'EXTERNO (Mac)';
+    console.log(`📦 Banco Conectado: [${dbConfig.database}] via ${ambiente}`);
+    console.log(`   Host: ${dbConfig.host}:${dbConfig.port}`);
+});
+
+pool.on('error', (err) => {
+    console.error('🔥 Erro Crítico/Queda na conexão com o Banco:', err);
+    // Em produção, poderiamos tentar reconectar ou alertar um sistema de monitoramento
 });
 
 export default pool;
@@ -853,12 +902,18 @@ import adminRoutes from './adminRoutes';
 
 const routes = Router();
 
+// --- Detecção de Ambiente ---
+// Reutilizamos a mesma lógica do banco de dados
+const isDocker = process.env.IS_DOCKER === 'true';
+
 // --- Health Check (Para monitoramento) ---
 routes.get('/', (req: Request, res: Response) => {
     res.status(200).json({
         status: 'online',
         service: 'AWLSRV LoginHub',
         version: '1.0.0',
+        environment: isDocker ? '🐳 Docker (Rede Interna)' : '🍎 Mac (Acesso Remoto)', 
+        db_target: process.env.DB_HOST || (isDocker ? 'awlsrvDB_postgres' : 'DuckDNS/Local'),
         message: '🚀 Sistema operante e protegido.',
         timestamp: new Date().toISOString()
     });

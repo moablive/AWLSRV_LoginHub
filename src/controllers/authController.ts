@@ -41,4 +41,28 @@ export class AuthController {
             }
         }
     }
+
+    /**
+     * POST /auth/logout
+     * O Frontend deve chamar isso e depois apagar o token do LocalStorage
+     */
+    static async logout(req: Request, res: Response) {
+        try {
+            // Pegamos o token do Header para (futuramente) invalidá-lo
+            const authHeader = req.headers.authorization;
+            const token = authHeader && authHeader.split(' ')[1];
+
+            await authService.logout(token);
+
+            // Retorna 200 OK para o Front saber que pode limpar o storage
+            return res.status(200).json({ 
+                message: 'Logout realizado com sucesso.',
+                action: 'CLEAR_LOCAL_STORAGE' // Dica para o frontend
+            });
+
+        } catch (error: any) {
+            console.error('Erro no Logout:', error.message);
+            return res.status(500).json({ error: 'Erro ao processar logout.' });
+        }
+    }
 }
