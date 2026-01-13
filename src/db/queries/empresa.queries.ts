@@ -19,6 +19,7 @@ export const EmpresaQueries = {
 
     // 3. Listagem Geral (Para o Painel Super Admin)
     // Retorna dados da empresa + contagem total de usuários nela
+    // CORREÇÃO: 'created_at' alterado para 'data_cadastro' (nome real da coluna)
     LIST_ALL: `
         SELECT 
             e.id, 
@@ -27,9 +28,14 @@ export const EmpresaQueries = {
             e.email, 
             e.telefone,
             e.status,
-            e.created_at,
+            e.data_cadastro as created_at, -- Alias para manter padrão no frontend
             (SELECT COUNT(*)::int FROM usuarios u WHERE u.empresa_id = e.id) as total_usuarios
         FROM empresas e
-        ORDER BY e.created_at DESC;
+        ORDER BY e.data_cadastro DESC;
+    `,
+
+    // 4. Busca por ID (Útil para Header da página de detalhes)
+    FIND_BY_ID: `
+        SELECT id, nome, status FROM empresas WHERE id = $1;
     `
 };

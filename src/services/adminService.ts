@@ -7,8 +7,14 @@ import { CreateCompanyDTO } from '../types/dtos/empresa.dto';
 
 export class AdminService {
 
+    // ==========================================================
+    // 1. PROVISIONAMENTO DE TENANTS (EMPRESAS)
+    // ==========================================================
+    
     /**
-     * 1. Onboarding: Cria Empresa + Usuário Admin em uma transação atômica.
+     * Cria a estrutura inicial: Empresa + Primeiro Admin.
+     * Utiliza transação (BEGIN/COMMIT) para garantir que não criamos
+     * uma empresa sem dono ou um dono sem empresa.
      */
     public async registerCompany(data: CreateCompanyDTO) {
         const client = await pool.connect();
@@ -16,62 +22,74 @@ export class AdminService {
         try {
             await client.query('BEGIN'); 
 
-            // A. Cria a Empresa
+            // A. Inserir Empresa
             const companyRes = await client.query(EmpresaQueries.CREATE, [
                 data.nome,
                 data.documento,
                 data.email,
-                data.telefone
+                data.telefone || null
             ]);
             
             const empresaId = companyRes.rows[0].id;
 
-            // B. Gera Hash da Senha
+            // B. Preparar Credencial (Hash)
             const salt = await bcrypt.genSalt(10);
             const passwordHash = await bcrypt.hash(data.password, salt);
 
-            // C. Cria o Admin
-            // 3. CORREÇÃO: Usar UsuarioQueries (conforme importado)
+            // C. Inserir Usuário Admin
+            // Passamos a string 'admin'. A Query SQL fará o sub-select para achar o ID.
             await client.query(UsuarioQueries.CREATE, [
                 empresaId,
                 'admin', 
                 data.admin_nome,
                 data.admin_email,
                 passwordHash,
-                data.admin_telefone
+                data.admin_telefone || null
             ]);
 
             await client.query('COMMIT'); 
 
             return { 
-                message: 'Empresa e Admin criados com sucesso!', 
+                status: 'success',
+                message: 'Tenant provisionado. Usuário pronto para solicitar Token.', 
                 empresaId,
-                adminEmail: data.admin_email
+                usuario: data.admin_email
             };
 
         } catch (error) {
             await client.query('ROLLBACK');
-            throw error;
+            throw error; // Repassa o erro para o Controller tratar
         } finally {
             client.release();
         }
     }
 
+    // ==========================================================
+    // 2. PROVISIONAMENTO DE IDENTIDADES (USUÁRIOS)
+    // ==========================================================
+
     /**
-     * 2. Adicionar Usuário Normal em Empresa Existente
+     * Adiciona usuários secundários (Admin ou Comum) a uma empresa existente.
+     * Estes usuários usarão login/senha para gerar Tokens Bearer na API Pública.
      */
     public async addUser(data: CreateUserDTO): Promise<void> {
+        // Validações de Regra de Negócio
         if (!data.empresa_id) {
-            throw new Error('ID da empresa é obrigatório para criar usuário.');
+            throw new Error('Vinculação obrigatória: O usuário deve pertencer a uma empresa.');
         }
 
+        if (!data.password) {
+            throw new Error('Senha é obrigatória para provisionar um novo usuário.');
+        }
+
+        // Criptografia (Security by Design)
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(data.password, salt);
 
-        // 3. CORREÇÃO: Usar UsuarioQueries
+        // A role ('admin' ou 'usuario') define as permissões no Token JWT
         await pool.query(UsuarioQueries.CREATE, [
             data.empresa_id,
-            data.role, 
+            data.role || 'usuario', // Fallback seguro para 'usuario' se vier vazio
             data.nome,
             data.email,
             passwordHash,
@@ -80,7 +98,7 @@ export class AdminService {
     }
 
     // ==========================================================
-    // MÉTODOS DE LEITURA
+    // 3. AUDITORIA E LISTAGEM (DASHBOARD)
     // ==========================================================
 
     public async getAllCompanies() {
@@ -89,7 +107,6 @@ export class AdminService {
     }
 
     public async getUsersByCompany(empresaId: string) {
-        // 3. CORREÇÃO: Usar UsuarioQueries
         const result = await pool.query(UsuarioQueries.LIST_BY_COMPANY, [empresaId]);
         return result.rows;
     }

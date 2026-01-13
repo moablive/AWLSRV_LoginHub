@@ -1,43 +1,46 @@
 // src/types/dtos/auth.dto.ts
 
+// 1. Definição de Tipos para Segurança (Evita erros de digitação como 'user' ou 'adm')
+export type UserRole = 'admin' | 'usuario';
 
 export interface LoginInputDTO {
     email: string;
-    senha_plana: string;
+    password: string; // CORREÇÃO: Alinhado com o controller (era senha_plana)
 }
 
-
+/**
+ * Interface que representa exatamente o que o banco retorna 
+ * na query AuthQueries.FIND_BY_EMAIL
+ */
 export interface UserLoginQueryResult {
     id: string;
     nome: string;
     email: string;
     senha_hash: string;
-    user_status: string;
     empresa_id: string;
-    empresa_status: string;
     empresa_nome: string;
-    role: string; // Ex: 'admin' | 'usuario'
+    empresa_status: string;
+    role: string; // Do banco vem string, depois validamos se é UserRole
+    // OBS: Removido 'user_status' pois essa coluna não existe no schema atual
 }
 
-
 export interface JWTPayload {
-    sub: string;        // ID do usuário (Padrão JWT é 'sub' de Subject)
+    sub: string;        // ID do usuário (Padrão JWT)
     email: string;
     empresaId: string;
-    role: string;
-    iat?: number;       // Issued At (Gerado autom pelo JWT)
-    exp?: number;       // Expiration (Gerado autom pelo JWT)
+    role: UserRole;     // Garante que o token tenha apenas roles válidas
+    iat?: number;       // Issued At (Data criação)
+    exp?: number;       // Expiration (Data expiração)
 }
 
 export interface LoginResponseDTO {
     token: string;
-    expiresIn: number; // Segundos
+    expiresIn: number; // Tempo em segundos
     usuario: {
         id: string;
         nome: string;
         email: string;
-        role: string;
-        // Não retornamos senha, hash, nem datas desnecessárias aqui
+        role: UserRole;
     };
     empresa: {
         id: string;
@@ -47,10 +50,10 @@ export interface LoginResponseDTO {
 }
 
 export interface CreateUserDTO {
-    empresa_id: string; // O Admin precisa dizer para qual empresa é (se for SuperAdmin) ou pegamos do token
+    empresa_id: string; 
     nome: string;
     email: string;
-    password: string; // Senha inicial
-    role: string; // 'admin' | 'usuario'
-    telefone?: string;
+    password: string; 
+    role: UserRole;     // 'admin' | 'usuario'
+    telefone?: string | null; // Aceita nulo para alinhar com banco SQL
 }

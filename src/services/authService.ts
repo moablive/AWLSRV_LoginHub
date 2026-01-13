@@ -2,7 +2,13 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pool from '../db/db'; 
 import { AuthQueries } from '../db/queries/auth.queries';
-import { LoginInputDTO, LoginResponseDTO, UserLoginQueryResult, JWTPayload } from '../types/dtos/auth.dto';
+import { 
+    LoginInputDTO, 
+    LoginResponseDTO, 
+    UserLoginQueryResult, 
+    JWTPayload,
+    UserRole 
+} from '../types/dtos/auth.dto';
 
 export class AuthService {
     
@@ -17,31 +23,44 @@ export class AuthService {
             throw new Error('CREDENCIAIS_INVALIDAS');
         }
 
+        // Tipagem do resultado do banco
         const user: UserLoginQueryResult = result.rows[0];
 
-        // 2. Verifica Status da Empresa e Usuário
-        if (user.empresa_status !== 'ativa') {
+        // 2. Verifica Status da Empresa
+        // CORREÇÃO: O status no banco é 'ativo' (masculino), conforme EmpresaQueries
+        if (user.empresa_status !== 'ativo') {
             throw new Error('EMPRESA_BLOQUEADA');
         }
-        if (user.user_status !== 'ativo') {
-            throw new Error('USUARIO_BLOQUEADO');
-        }
+
+        // OBS: Removemos a checagem de 'user_status' pois essa coluna não existe no schema 'usuarios' atual.
+        // Se quiser implementar bloqueio de usuário no futuro, precisa criar a coluna no banco primeiro.
 
         // 3. Valida Senha
-        const senhaValida = await bcrypt.compare(data.senha_plana, user.senha_hash);
+        // CORREÇÃO: O DTO agora usa 'password', não 'senha_plana'
+        const senhaValida = await bcrypt.compare(data.password, user.senha_hash);
+        
         if (!senhaValida) {
             throw new Error('CREDENCIAIS_INVALIDAS');
         }
 
+        // (Opcional) Atualiza data do último login para auditoria
+        await pool.query(AuthQueries.UPDATE_LAST_LOGIN, [user.id]);
+
         // 4. Gera o Token JWT
+        // Verifica se a chave secreta existe (Evita crash em produção)
+        const jwtSecret = process.env.JWT_SECRET;
+        if (!jwtSecret) {
+            throw new Error('ERRO_CONFIGURACAO_SERVIDOR'); // JWT_SECRET ausente
+        }
+
         const payload: JWTPayload = {
             sub: user.id,
             email: user.email,
             empresaId: user.empresa_id,
-            role: user.role
+            role: user.role as UserRole // Cast seguro pois validamos ao criar
         };
 
-        const token = jwt.sign(payload, process.env.JWT_SECRET as string, {
+        const token = jwt.sign(payload, jwtSecret, {
             expiresIn: '8h' // Expiração do token
         });
 
@@ -53,7 +72,7 @@ export class AuthService {
                 id: user.id,
                 nome: user.nome,
                 email: user.email,
-                role: user.role
+                role: user.role as UserRole
             },
             empresa: {
                 id: user.empresa_id,
@@ -69,14 +88,12 @@ export class AuthService {
      */
     public async logout(token: string | undefined): Promise<void> {
         // Se quiséssemos invalidar o token antes do tempo (Blacklist), faríamos aqui.
-        // Por enquanto, apenas confirmamos a ação.
         if (!token) {
-            // Opcional: Lançar erro ou ignorar
             return;
         }
         
-        // Exemplo de Log (Auditoria)
-        // console.log(`[AUTH] Token deslogado: ${token.slice(0, 10)}...`);
+        // Log para fins de debug/auditoria
+        // console.log(`[AUTH] Logout efetuado para token final ...${token.slice(-6)}`);
         return;
     }
 }
