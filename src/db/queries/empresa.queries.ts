@@ -1,13 +1,35 @@
+// src/db/queries/empresa.queries.ts
+
 export const EmpresaQueries = {
-    // Cria empresa e retorna ID
+    
+    // 1. Criação de Empresa
+    // Insere os dados e define status padrão como 'ativo'
     CREATE: `
-        INSERT INTO empresas (nome, documento, dominio)
-        VALUES ($1, $2, $3)
+        INSERT INTO empresas (nome, documento, email, telefone, status)
+        VALUES ($1, $2, $3, $4, 'ativo')
         RETURNING id;
     `,
 
-    // Verifica se documento já existe
+    // 2. Validação de Duplicidade (Antes de criar)
     CHECK_EXISTS: `
-        SELECT id FROM empresas WHERE documento = $1 LIMIT 1;
+        SELECT id FROM empresas 
+        WHERE documento = $1 OR email = $2 
+        LIMIT 1;
+    `,
+
+    // 3. Listagem Geral (Para o Painel Super Admin)
+    // Retorna dados da empresa + contagem total de usuários nela
+    LIST_ALL: `
+        SELECT 
+            e.id, 
+            e.nome, 
+            e.documento, 
+            e.email, 
+            e.telefone,
+            e.status,
+            e.created_at,
+            (SELECT COUNT(*)::int FROM usuarios u WHERE u.empresa_id = e.id) as total_usuarios
+        FROM empresas e
+        ORDER BY e.created_at DESC;
     `
 };
