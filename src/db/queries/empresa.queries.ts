@@ -2,24 +2,18 @@
 
 export const EmpresaQueries = {
     
-    // 1. Criação de Empresa
-    // Insere os dados e define status padrão como 'ativo'
     CREATE: `
         INSERT INTO empresas (nome, documento, email, telefone, status)
         VALUES ($1, $2, $3, $4, 'ativo')
         RETURNING id;
     `,
 
-    // 2. Validação de Duplicidade (Antes de criar)
     CHECK_EXISTS: `
         SELECT id FROM empresas 
         WHERE documento = $1 OR email = $2 
         LIMIT 1;
     `,
 
-    // 3. Listagem Geral (Para o Painel Super Admin)
-    // Retorna dados da empresa + contagem total de usuários nela
-    // CORREÇÃO: 'created_at' alterado para 'data_cadastro' (nome real da coluna)
     LIST_ALL: `
         SELECT 
             e.id, 
@@ -28,14 +22,20 @@ export const EmpresaQueries = {
             e.email, 
             e.telefone,
             e.status,
-            e.data_cadastro as created_at, -- Alias para manter padrão no frontend
+            e.data_cadastro as created_at,
             (SELECT COUNT(*)::int FROM usuarios u WHERE u.empresa_id = e.id) as total_usuarios
         FROM empresas e
         ORDER BY e.data_cadastro DESC;
     `,
 
-    // 4. Busca por ID (Útil para Header da página de detalhes)
     FIND_BY_ID: `
         SELECT id, nome, status FROM empresas WHERE id = $1;
+    `,
+
+    UPDATE_STATUS: `
+        UPDATE empresas 
+        SET status = $1, data_atualizacao = NOW() 
+        WHERE id = $2 
+        RETURNING id, nome, email, status;
     `
 };

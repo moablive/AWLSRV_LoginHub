@@ -1,32 +1,41 @@
-//  src/db/queries/auth.queries.ts
+// src/db/queries/auth.queries.ts
 
 export const AuthQueries = {
     
     /**
      * Busca usuário pelo email para o Login.
-     * Retorna dados do usuário + status da empresa para validação.
+     * Retorna dados do usuário + status da empresa para validação (Kill Switch).
+     * * IMPORTANTE:
+     * - Usamos 'INNER JOIN' para garantir que usuários de empresas deletadas não loguem.
+     * - Os aliases (AS ...) devem bater EXATAMENTE com a interface UserLoginQueryResult.
      */
-    FIND_BY_EMAIL: `
+    FIND_BY_EMAIL_WITH_RELATIONS: `
         SELECT 
             u.id,
             u.nome,
             u.email,
             u.senha_hash,
             u.empresa_id,
-            e.nome as empresa_nome,
-            e.status as empresa_status, -- Crucial: Se for 'inativo', o login deve ser barrado no código
-            n.nome as role              -- Mapeia a coluna 'nome' ('admin'/'usuario') para 'role' no JWT
+            
+            -- Dados da Empresa
+            e.nome AS empresa_nome,
+            e.status AS empresa_status, -- Crucial: Se for 'inativo', o login é barrado no Service
+            
+            -- Dados do Nível de Acesso
+            n.nome AS role_nome         -- Mapeia para 'role_nome' no DTO
+        
         FROM usuarios u
-        JOIN empresas e ON u.empresa_id = e.id
-        JOIN niveis_acesso n ON u.nivel_acesso_id = n.id
+        INNER JOIN empresas e ON u.empresa_id = e.id
+        INNER JOIN niveis_acesso n ON u.nivel_acesso_id = n.id
+        
         WHERE u.email = $1
         LIMIT 1;
     `,
 
     /**
-     * Cria um novo usuário (Registro público ou interno).
+     * Cria um novo usuário.
      * O 2º parâmetro ($2) espera a string 'admin' ou 'usuario'.
-     * A subquery converte essa string para o ID correto.
+     * A subquery converte essa string para o UUID correto na tabela niveis_acesso.
      */
     CREATE_USER: `
         INSERT INTO usuarios (
@@ -44,23 +53,22 @@ export const AuthQueries = {
             $5, 
             $6
         )
-        RETURNING id, nome, email, data_cadastro as created_at;
+        RETURNING id, nome, email, data_cadastro;
     `,
 
     /**
      * Atualiza a data do último login para auditoria.
-     * Deve ser chamado logo após a validação da senha (bcrypt).
+     * Deve ser chamado de forma assíncrona (sem await) para não travar o login.
      */
     UPDATE_LAST_LOGIN: `
         UPDATE usuarios 
-        SET ultimo_acesso = NOW() 
+        SET ultimo_login = NOW() 
         WHERE id = $1;
     `,
 
     /**
-     * Verifica se o email já existe no sistema TODO.
-     * NECESSÁRIO: O email deve ser único globalmente para o login funcionar
-     * sem precisar informar o ID da empresa na tela de login.
+     * Verifica se o email já existe globalmente.
+     * Usado no cadastro para garantir unicidade (Unique Constraint).
      */
     CHECK_EMAIL_EXISTS: `
         SELECT id FROM usuarios 

@@ -1,16 +1,16 @@
 // src/types/dtos/auth.dto.ts
 
-// 1. Definição de Tipos para Segurança (Evita erros de digitação como 'user' ou 'adm')
+// 1. Definição de Tipos
 export type UserRole = 'admin' | 'usuario';
 
 export interface LoginInputDTO {
     email: string;
-    password: string; // CORREÇÃO: Alinhado com o controller (era senha_plana)
+    password: string; 
 }
 
 /**
- * Interface que representa exatamente o que o banco retorna 
- * na query AuthQueries.FIND_BY_EMAIL
+ * REFLETE EXATAMENTE O RETORNO DO SQL (AuthQueries.FIND_BY_EMAIL_WITH_RELATIONS)
+ * Se o SQL usa "AS role_nome", aqui deve ser "role_nome".
  */
 export interface UserLoginQueryResult {
     id: string;
@@ -18,24 +18,29 @@ export interface UserLoginQueryResult {
     email: string;
     senha_hash: string;
     empresa_id: string;
+    
+    // Campos vindos dos JOINs (Aliases)
     empresa_nome: string;
-    empresa_status: string;
-    role: string; // Do banco vem string, depois validamos se é UserRole
-    // OBS: Removido 'user_status' pois essa coluna não existe no schema atual
+    empresa_status: string; 
+    role_nome: string;
 }
 
+/**
+ * O que vai dentro do Token JWT.
+ * IMPORTANTE: Use snake_case em 'empresa_id' para facilitar o uso no banco depois.
+ */
 export interface JWTPayload {
-    sub: string;        // ID do usuário (Padrão JWT)
+    sub: string;        // ID do usuário
     email: string;
-    empresaId: string;
-    role: UserRole;     // Garante que o token tenha apenas roles válidas
-    iat?: number;       // Issued At (Data criação)
-    exp?: number;       // Expiration (Data expiração)
+    empresa_id: string; // <--- CORREÇÃO: O Middleware espera snake_case
+    role: string;       // Geralmente string simples para evitar erro de lib
+    iat?: number;
+    exp?: number;
 }
 
 export interface LoginResponseDTO {
     token: string;
-    expiresIn: number; // Tempo em segundos
+    expiresIn: number;
     usuario: {
         id: string;
         nome: string;
@@ -54,6 +59,6 @@ export interface CreateUserDTO {
     nome: string;
     email: string;
     password: string; 
-    role: UserRole;     // 'admin' | 'usuario'
-    telefone?: string | null; // Aceita nulo para alinhar com banco SQL
+    role: UserRole;    
+    telefone?: string | null; 
 }

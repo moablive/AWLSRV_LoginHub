@@ -1,15 +1,15 @@
+// src/routes/index.ts
 import { Router, Request, Response } from 'express';
-import authRoutes from './authRoutes'; 
-import adminRoutes from './adminRoutes'; 
+import authRoutes from './auth.routes'; 
+import adminRoutes from './admin.routes';
 
-const routes = Router();
+const router = Router();
 
 // --- Detecção de Ambiente ---
-// Reutilizamos a mesma lógica do banco de dados
 const isDocker = process.env.IS_DOCKER === 'true';
 
 // --- Health Check (Para monitoramento) ---
-routes.get('/', (req: Request, res: Response) => {
+router.get('/', (req: Request, res: Response) => {
     res.status(200).json({
         status: 'online',
         service: 'AWLSRV LoginHub',
@@ -23,10 +23,12 @@ routes.get('/', (req: Request, res: Response) => {
 
 // --- Definição das Rotas ---
 
-// Rotas Públicas (Login)
-routes.use('/auth', authRoutes);
+// 1. Rotas Públicas (Login)
+router.use('/auth', authRoutes);
 
-// Rotas Administrativas (Protegidas por Master Key ou Token)
-routes.use('/admin', adminRoutes);
+// 2. Rotas Administrativas (Protegidas por Master Key)
+// O 'adminRoutes' já inclui internamente as rotas de companies e users
+// Ex: GET /api/admin/companies, GET /api/admin/users
+router.use('/admin', adminRoutes);
 
-export default routes;
+export default router;
