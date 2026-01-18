@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { CompanyService } from '../../services/admin'; 
+import { CompanyService } from '../../services/admin';
 import { CreateCompanyDTO } from '../../types/dtos/empresa.dto';
 import { DbError } from '../../types/error';
 
@@ -7,10 +7,7 @@ const companyService = new CompanyService();
 
 export class CompanyController {
 
-    static async createCompany(
-        req: Request<Record<string, never>, Record<string, never>, CreateCompanyDTO>,
-        res: Response
-    ) {
+    static async createCompany(req: Request<{}, {}, CreateCompanyDTO>, res: Response) {
         try {
             const result = await companyService.registerCompany(req.body);
             return res.status(201).json(result);
@@ -40,8 +37,27 @@ export class CompanyController {
         }
     }
 
+
+    static async getById(req: Request<{ id: string }>, res: Response) {
+
+        const { id } = req.params;
+
+        try {
+            const company = await companyService.getCompanyById(id);
+            return res.status(200).json(company);
+        } catch (err: unknown) {
+            const error = err as { code?: string, message?: string };
+
+            if (error.code === 'NOT_FOUND') {
+                return res.status(404).json({ error: 'Empresa não encontrada' });
+            }
+            console.error('[CompanyController] getById:', err);
+            return res.status(500).json({ error: 'Erro Interno' });
+        }
+    }
+
     static async toggleCompanyStatus(
-        req: Request<{ id: string }, Record<string, never>, { status: string }>, 
+        req: Request<{ id: string }, {}, { status: string }>,
         res: Response
     ) {
         const { id } = req.params;
@@ -60,6 +76,20 @@ export class CompanyController {
         } catch (err) {
             console.error(`[CompanyController] toggleCompanyStatus:`, err);
             return res.status(500).json({ error: "Erro Interno" });
+        }
+    }
+
+    static async deleteCompany(req: Request<{ id: string }>, res: Response) {
+        const { id } = req.params;
+        try {
+            await companyService.deleteCompany(id);
+            return res.status(200).json({ message: 'Empresa removida com sucesso.' });
+        } catch (err: any) {
+            if (err.code === 'NOT_FOUND') {
+                return res.status(404).json({ error: 'Empresa não encontrada' });
+            }
+            console.error('[CompanyController] deleteCompany:', err);
+            return res.status(500).json({ error: 'Erro Interno' });
         }
     }
 }

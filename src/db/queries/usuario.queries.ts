@@ -27,7 +27,7 @@ export const UsuarioQueries = {
             u.nome, 
             u.email, 
             u.telefone, 
-            u.ultimo_login,
+            u.ultimo_acesso AS ultimo_login, -- CORRIGIDO
             na.nome as role
         FROM usuarios u
         JOIN niveis_acesso na ON u.nivel_acesso_id = na.id
@@ -40,7 +40,7 @@ export const UsuarioQueries = {
             u.id, 
             u.nome, 
             u.email, 
-            u.ultimo_login,
+            u.ultimo_acesso AS ultimo_login, -- CORRIGIDO
             e.nome as empresa_nome,
             na.nome as role
         FROM usuarios u

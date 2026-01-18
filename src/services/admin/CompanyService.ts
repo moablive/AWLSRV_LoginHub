@@ -57,6 +57,20 @@ export class CompanyService {
         return rows;
     }
 
+    public async getCompanyById(id: string) {
+        // Certifique-se que FIND_BY_ID existe no seu arquivo empresa.queries.ts
+        // Geralmente é: SELECT * FROM empresas WHERE id = $1
+        const { rows } = await pool.query(EmpresaQueries.FIND_BY_ID, [id]);
+        
+        if (rows.length === 0) {
+            const error = new Error('Empresa não encontrada');
+            (error as any).code = 'NOT_FOUND';
+            throw error;
+        }
+
+        return rows[0];
+    }
+
     public async updateCompanyStatus(id: string, status: 'ativo' | 'inativo') {
         const { rows, rowCount } = await pool.query(
             EmpresaQueries.UPDATE_STATUS,
@@ -68,5 +82,13 @@ export class CompanyService {
         }
 
         return rows[0];
+    }
+
+    public async deleteCompany(id: string) {
+        const { rowCount } = await pool.query(EmpresaQueries.DELETE, [id]);
+        
+        if (rowCount === 0) {
+            throw Object.assign(new Error('Empresa não encontrada'), { code: 'NOT_FOUND' });
+        }
     }
 }

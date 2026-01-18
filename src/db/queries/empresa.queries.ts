@@ -5,7 +5,7 @@ export const EmpresaQueries = {
     CREATE: `
         INSERT INTO empresas (nome, documento, email, telefone, status)
         VALUES ($1, $2, $3, $4, 'ativo')
-        RETURNING id;
+        RETURNING id, nome, email, status, data_cadastro;
     `,
 
     CHECK_EXISTS: `
@@ -22,14 +22,14 @@ export const EmpresaQueries = {
             e.email, 
             e.telefone,
             e.status,
-            e.data_cadastro as created_at,
+            e.data_cadastro, 
             (SELECT COUNT(*)::int FROM usuarios u WHERE u.empresa_id = e.id) as total_usuarios
         FROM empresas e
         ORDER BY e.data_cadastro DESC;
     `,
 
     FIND_BY_ID: `
-        SELECT id, nome, status FROM empresas WHERE id = $1;
+        SELECT * FROM empresas WHERE id = $1;
     `,
 
     UPDATE_STATUS: `
@@ -37,5 +37,7 @@ export const EmpresaQueries = {
         SET status = $1, data_atualizacao = NOW() 
         WHERE id = $2 
         RETURNING id, nome, email, status;
-    `
+    `,
+    
+    DELETE: `DELETE FROM empresas WHERE id = $1 RETURNING id`
 };
