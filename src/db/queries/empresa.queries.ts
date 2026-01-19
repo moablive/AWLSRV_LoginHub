@@ -32,6 +32,18 @@ export const EmpresaQueries = {
         SELECT * FROM empresas WHERE id = $1;
     `,
 
+    UPDATE: `
+        UPDATE empresas 
+        SET 
+            nome = $1, 
+            email = $2, 
+            documento = $3, 
+            telefone = $4,
+            data_atualizacao = NOW()
+        WHERE id = $5 
+        RETURNING *;
+    `,
+
     UPDATE_STATUS: `
         UPDATE empresas 
         SET status = $1, data_atualizacao = NOW() 

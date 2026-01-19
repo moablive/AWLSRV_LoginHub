@@ -1,16 +1,13 @@
 // DTO para Criação de Empresa + Admin (Onboarding)
 export interface CreateCompanyDTO {
-    // --- Dados da Empresa ---
-    nome: string;       // Antes: empresa_nome
-    documento: string;  // CNPJ ou CPF
-    email: string;      // Email corporativo
-    telefone: string;
-    
-    // --- Dados do Admin Inicial ---
+    nome: string;
+    documento: string;
+    email: string;
+    telefone?: string;
+    password: string;
     admin_nome: string;
     admin_email: string;
-    password: string;   // Antes: admin_senha (padronizado com o front)
-    admin_telefone: string;
+    admin_telefone?: string;
 }
 
 // DTO de Resposta (Output)
@@ -28,4 +25,13 @@ export interface EmpresaSummaryDTO {
     email: string;
     status: string;
     total_usuarios?: number;
+}
+
+
+// Update 
+export interface UpdateCompanyDTO {
+    nome: string;
+    email: string;
+    documento: string;
+    telefone?: string | undefined;
 }

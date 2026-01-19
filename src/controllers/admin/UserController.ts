@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { UserService } from '../../services/admin'; 
-import { CreateUserDTO } from '../../types/dtos/auth.dto'; 
+import { UserService } from '../../services/admin';
+import { CreateUserDTO, UpdateUserDTO } from '../../types/dtos/user.types';
 import { DbError } from '../../types/error';
 
 const userService = new UserService();
@@ -73,13 +73,48 @@ export class UserController {
 
         } catch (err: unknown) {
             const error = err as Error;
-            
+
             if (error.message === 'Usuário não encontrado.') {
                 return res.status(404).json({ error: 'Não encontrado' });
             }
 
             console.error(`[UserController] removeUser (ID: ${id}):`, err);
             return res.status(500).json({ error: 'Erro Interno' });
+        }
+    }
+
+    static async updateUser(req: Request<{ id: string }, {}, UpdateUserDTO>, res: Response) {
+        const { id } = req.params;
+        const { nome, email, password, telefone } = req.body;
+
+        try {
+            // Chama o serviço (que já trata hash de senha e validação de email)
+            const updatedUser = await userService.updateUser(id, {
+                nome,
+                email,
+                password,
+                telefone
+            });
+
+            return res.status(200).json(updatedUser);
+
+        } catch (err: unknown) {
+            const error = err as DbError;
+
+            // Tratamento de erros específicos vindos do Service
+            if (error.code === 'NOT_FOUND') {
+                return res.status(404).json({ message: 'Usuário não encontrado.' });
+            }
+
+            if (error.code === 'DUPLICATE_ENTRY' || error.code === '23505') {
+                return res.status(409).json({ 
+                    error: 'Conflito de Dados',
+                    message: error.message || 'E-mail já está em uso.'
+                });
+            }
+
+            console.error('[UserController] updateUser:', err);
+            return res.status(500).json({ message: 'Erro interno ao atualizar usuário.' });
         }
     }
 }

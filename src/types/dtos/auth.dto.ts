@@ -1,6 +1,5 @@
 // src/types/dtos/auth.dto.ts
 
-// 1. Definição de Tipos
 export type UserRole = 'admin' | 'usuario';
 
 export interface LoginInputDTO {
@@ -8,10 +7,6 @@ export interface LoginInputDTO {
     password: string; 
 }
 
-/**
- * REFLETE EXATAMENTE O RETORNO DO SQL (AuthQueries.FIND_BY_EMAIL_WITH_RELATIONS)
- * Se o SQL usa "AS role_nome", aqui deve ser "role_nome".
- */
 export interface UserLoginQueryResult {
     id: string;
     nome: string;
@@ -25,10 +20,6 @@ export interface UserLoginQueryResult {
     role_nome: string;
 }
 
-/**
- * O que vai dentro do Token JWT.
- * IMPORTANTE: Use snake_case em 'empresa_id' para facilitar o uso no banco depois.
- */
 export interface JWTPayload {
     sub: string;        // ID do usuário
     email: string;
@@ -54,11 +45,3 @@ export interface LoginResponseDTO {
     };
 }
 
-export interface CreateUserDTO {
-    empresa_id: string; 
-    nome: string;
-    email: string;
-    password: string; 
-    role: UserRole;    
-    telefone?: string | null; 
-}

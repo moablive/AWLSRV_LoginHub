@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import pool from '../../db/db';
 import { EmpresaQueries } from '../../db/queries/empresa.queries';
 import { UsuarioQueries } from '../../db/queries/usuario.queries';
-import { CreateCompanyDTO } from '../../types/dtos/empresa.dto';
+import { CreateCompanyDTO, UpdateCompanyDTO } from '../../types/dtos/empresa.dto';
 
 export class CompanyService {
 
@@ -12,6 +12,7 @@ export class CompanyService {
         try {
             await client.query('BEGIN');
 
+            // Cria a empresa
             const companyRes = await client.query(EmpresaQueries.CREATE, [
                 data.nome,
                 data.documento,
@@ -21,9 +22,11 @@ export class CompanyService {
 
             const empresaId = companyRes.rows[0].id;
 
+            // Gera hash da senha
             const salt = await bcrypt.genSalt(10);
             const passwordHash = await bcrypt.hash(data.password, salt);
 
+            // Cria o usuário admin vinculado
             await client.query(UsuarioQueries.CREATE, [
                 empresaId,
                 'admin', 
@@ -58,8 +61,6 @@ export class CompanyService {
     }
 
     public async getCompanyById(id: string) {
-        // Certifique-se que FIND_BY_ID existe no seu arquivo empresa.queries.ts
-        // Geralmente é: SELECT * FROM empresas WHERE id = $1
         const { rows } = await pool.query(EmpresaQueries.FIND_BY_ID, [id]);
         
         if (rows.length === 0) {
@@ -69,6 +70,38 @@ export class CompanyService {
         }
 
         return rows[0];
+    }
+
+    public async updateCompany(id: string, data: UpdateCompanyDTO) {
+        try {
+            const { rows, rowCount } = await pool.query(
+                EmpresaQueries.UPDATE, 
+                [
+                    data.nome, 
+                    data.email, 
+                    data.documento, 
+                    data.telefone || null, 
+                    id
+                ]
+            );
+
+            if (rowCount === 0) {
+                const error = new Error('Empresa não encontrada');
+                (error as any).code = 'NOT_FOUND';
+                throw error;
+            }
+
+            return rows[0];
+
+        } catch (error: any) {
+            // Tratamento de erro para CNPJ ou Email duplicado (código Postgres 23505)
+            if (error.code === '23505') {
+                const newError = new Error('Documento (CNPJ) ou E-mail já estão em uso por outra empresa.');
+                (newError as any).code = 'DUPLICATE_ENTRY';
+                throw newError;
+            }
+            throw error;
+        }
     }
 
     public async updateCompanyStatus(id: string, status: 'ativo' | 'inativo') {

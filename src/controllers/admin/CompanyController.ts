@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { CompanyService } from '../../services/admin';
-import { CreateCompanyDTO } from '../../types/dtos/empresa.dto';
+import { CreateCompanyDTO, UpdateCompanyDTO } from '../../types/dtos/empresa.dto';
 import { DbError } from '../../types/error';
 
 const companyService = new CompanyService();
@@ -12,7 +12,7 @@ export class CompanyController {
             const result = await companyService.registerCompany(req.body);
             return res.status(201).json(result);
 
-        } catch (err) {
+        } catch (err: unknown) {
             const error = err as DbError;
             console.error('[CompanyController] createCompany:', error);
 
@@ -31,21 +31,20 @@ export class CompanyController {
         try {
             const companies = await companyService.getAllCompanies();
             return res.status(200).json(companies);
-        } catch (err) {
+        } catch (err: unknown) {
             console.error('[CompanyController] getAllCompanies:', err);
             return res.status(500).json({ error: 'Erro Interno' });
         }
     }
 
-
     static async getById(req: Request<{ id: string }>, res: Response) {
-
         const { id } = req.params;
 
         try {
             const company = await companyService.getCompanyById(id);
             return res.status(200).json(company);
         } catch (err: unknown) {
+            // Asserção de tipo para ler propriedades personalizadas do erro
             const error = err as { code?: string, message?: string };
 
             if (error.code === 'NOT_FOUND') {
@@ -73,7 +72,11 @@ export class CompanyController {
                 message: `Status atualizado para ${status}.`,
                 empresa
             });
-        } catch (err) {
+        } catch (err: unknown) {
+            const error = err as { code?: string };
+            if (error.code === 'NOT_FOUND') {
+                return res.status(404).json({ error: 'Empresa não encontrada' });
+            }
             console.error(`[CompanyController] toggleCompanyStatus:`, err);
             return res.status(500).json({ error: "Erro Interno" });
         }
@@ -84,12 +87,49 @@ export class CompanyController {
         try {
             await companyService.deleteCompany(id);
             return res.status(200).json({ message: 'Empresa removida com sucesso.' });
-        } catch (err: any) {
-            if (err.code === 'NOT_FOUND') {
+        } catch (err: unknown) {
+            const error = err as { code?: string };
+            
+            if (error.code === 'NOT_FOUND') {
                 return res.status(404).json({ error: 'Empresa não encontrada' });
             }
             console.error('[CompanyController] deleteCompany:', err);
             return res.status(500).json({ error: 'Erro Interno' });
+        }
+    }
+
+    static async updateCompany(req: Request<{ id: string }, {}, UpdateCompanyDTO>, res: Response) {
+        const { id } = req.params;
+        const { nome, email, documento, telefone } = req.body;
+
+        try {
+            // Chama o service com o objeto tipado corretamente
+            const updatedCompany = await companyService.updateCompany(id, {
+                nome,
+                email,
+                documento,
+                telefone: telefone || undefined 
+            });
+
+            return res.status(200).json(updatedCompany);
+
+        } catch (err: unknown) {
+            const error = err as DbError;
+
+            // Tratamento de erros lançados pelo Service
+            if (error.code === 'NOT_FOUND') {
+                return res.status(404).json({ message: 'Empresa não encontrada.' });
+            }
+            
+            if (error.code === 'DUPLICATE_ENTRY' || error.code === '23505') {
+                return res.status(409).json({ 
+                    error: 'Conflito de Dados',
+                    message: error.message || 'Documento ou E-mail já em uso.'
+                });
+            }
+
+            console.error('[CompanyController] updateCompany:', error);
+            return res.status(500).json({ message: 'Erro interno ao atualizar empresa.' });
         }
     }
 }
