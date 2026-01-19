@@ -1,12 +1,15 @@
 // src/types/dtos/auth.dto.ts
 
+// Usado para tipar a resposta do login e payloads
 export type UserRole = 'admin' | 'usuario';
 
+// 1. O que o Front envia para logar
 export interface LoginInputDTO {
     email: string;
     password: string; 
 }
 
+// 2. O que o Banco retorna na query de login (com joins)
 export interface UserLoginQueryResult {
     id: string;
     nome: string;
@@ -20,15 +23,17 @@ export interface UserLoginQueryResult {
     role_nome: string;
 }
 
+// 3. O que vai dentro do Token JWT
 export interface JWTPayload {
     sub: string;        // ID do usuário
     email: string;
-    empresa_id: string; // <--- CORREÇÃO: O Middleware espera snake_case
-    role: string;       // Geralmente string simples para evitar erro de lib
+    empresa_id: string; 
+    role: string;       
     iat?: number;
     exp?: number;
 }
 
+// 4. O que a API devolve para o Front após sucesso
 export interface LoginResponseDTO {
     token: string;
     expiresIn: number;
@@ -44,4 +49,3 @@ export interface LoginResponseDTO {
         status: string;
     };
 }
-

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { UserService } from '../../services/admin';
-import { CreateUserDTO, UpdateUserDTO } from '../../types/dtos/user.types';
+import { CreateUserDTO, UpdateUserDTO } from '../../types/dtos/user.dto';
 import { DbError } from '../../types/error';
 
 const userService = new UserService();

@@ -1,8 +1,8 @@
 import bcrypt from 'bcryptjs';
 import pool from '../../db/db';
 import { UsuarioQueries } from '../../db/queries/usuario.queries';
-import { CreateUserDTO, UpdateUserDTO } from '../../types/dtos/user.types';
-import { UserResponse } from '../../types/dtos/user.types';
+import { CreateUserDTO, UpdateUserDTO } from '../../types/dtos/user.dto';
+import { UserResponse } from '../../types/dtos/user.dto';
 
 export class UserService {
 
