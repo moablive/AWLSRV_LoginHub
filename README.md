@@ -1,6 +1,8 @@
-# 🗄️ AWLSRV Login Hub
+# 🗄️ AWLSRV Login Hub - API
 
-Sistema centralizado de autenticação multi-tenant e gateway de permissões.
+Backend centralizado para autenticação multi-tenant, gestão de permissões e gateway de identidade (IdP).
+
+Esta API fornece os endpoints seguros consumidos pelo painel administrativo e por aplicações clientes.
 
 <p align="center">
   <a href="https://skillicons.dev">
@@ -10,85 +12,132 @@ Sistema centralizado de autenticação multi-tenant e gateway de permissões.
 
 ---
 
-## 🏗️ Estrutura do Projeto
+## 🏗️ Arquitetura e Estrutura
 
-O sistema segue uma arquitetura **Service-Repository** para robustez e escalabilidade:
+O sistema segue uma arquitetura robusta baseada em **Camadas (Layered Architecture)**, priorizando a integridade dos dados via transações SQL manuais.
 
-- **`src/controllers`**: Gerencia requisições HTTP (Entrada/Saída).
-- **`src/services`**: Regras de negócio, validações e Criptografia (Bcrypt/JWT).
-- **`src/db`**: Comandos SQL puros e conexão com Banco.
-- **`src/routes`**: Definição de endpoints da API.
+- **`src/controllers`**: Gerencia requisições HTTP, validação de entrada e respostas padronizadas.
+- **`src/services`**: Contém a regra de negócio.
+  - **Destaque**: Implementação de Transações ACID (BEGIN, COMMIT, ROLLBACK) para operações críticas (ex: remover usuário e seus vínculos).
+- **`src/db`**: Configuração do Pool de conexões PostgreSQL e queries SQL puras para máxima performance.
+- **`src/routes`**: Definição de endpoints da API (separados por domínios: Auth, Companies, Users).
+- **`src/middlewares`**: Interceptadores para validação de JWT e Chave Mestra (Master Key).
 
-# 🗄️ Login Hub - Database Schema
+---
 
-Sistema de banco de dados para gerenciamento de autenticação multi-tenant.
+## 🗄️ Banco de Dados (Schema)
 
-## 📊 Estrutura do Banco de Dados
+O sistema utiliza **PostgreSQL** com relacionamentos fortes e chaves estrangeiras (Foreign Keys) com cascata configurada.
 
-### 3 Tabelas Principais
+### 📊 Diagrama Relacional
 
-#### 1. **empresas** 
-Representa seus clientes (donos dos projetos Docker)
+```mermaid
+erDiagram
+    EMPRESAS ||--|{ USUARIOS : "possui"
+    NIVEIS_ACESSO ||--|{ USUARIOS : "define permissão"
+
+    EMPRESAS {
+        uuid id PK
+        string documento "CNPJ/CPF"
+        string nome
+        string status "ativo/inativo"
+    }
+    USUARIOS {
+        uuid id PK
+        uuid empresa_id FK
+        uuid nivel_acesso_id FK
+        string email
+        string senha_hash
+    }
+    NIVEIS_ACESSO {
+        uuid id PK
+        string nome "admin/usuario"
+    }
+```
+
+---
+
+### 📋 Detalhamento das Tabelas
+
+#### 1. `empresas` (Tenants)
+Representa os clientes finais (donos dos projetos/infraestrutura).
 
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
-| id | UUID | Identificador único |
-| nome | VARCHAR(255) | Nome da empresa |
-| documento | VARCHAR(18) | CPF ou CNPJ (único) |
-| email | VARCHAR(255) | Email de contato |
-| telefone | VARCHAR(20) | Telefone |
-| status | VARCHAR(20) | ativo / inativo |
-| data_cadastro | TIMESTAMP | Data de criação |
-| data_atualizacao | TIMESTAMP | Última atualização |
+| `id` | UUID | Identificador único (PK) |
+| `nome` | VARCHAR | Razão Social ou Nome Fantasia |
+| `documento` | VARCHAR | CPF ou CNPJ (Unique Index) |
+| `status` | VARCHAR | Controle de acesso (ativo, inativo) |
 
-#### 2. **niveis_acesso**
-Define os níveis de permissão dos usuários
+#### 2. `usuarios` (Identity)
+Usuários vinculados a uma empresa específica. A unicidade do e-mail é composta (`empresa_id` + `email`), permitindo que o mesmo e-mail exista em empresas diferentes.
 
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
-| id | UUID | Identificador único |
-| nome | VARCHAR(50) | admin / usuario |
-| descricao | TEXT | Descrição do nível |
-| data_cadastro | TIMESTAMP | Data de criação |
+| `id` | UUID | Identificador único (PK) |
+| `empresa_id` | UUID | Vínculo com Tenant (FK) |
+| `nivel_acesso_id` | UUID | Define se é Admin ou User (FK) |
+| `senha_hash` | VARCHAR | Hash Bcrypt (Nunca salvo em texto plano) |
 
-#### 3. **usuarios**
-Usuários das empresas (quem faz login no sistema)
+---
 
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID | Identificador único |
-| empresa_id | UUID | FK para empresas |
-| nivel_acesso_id | UUID | FK para niveis_acesso |
-| nome | VARCHAR(255) | Nome completo |
-| email | VARCHAR(255) | Email (único por empresa) |
-| senha_hash | VARCHAR(255) | Senha criptografada |
-| telefone | VARCHAR(20) | Telefone |
-| status | VARCHAR(20) | ativo / inativo / bloqueado |
-| ultimo_acesso | TIMESTAMP | Último login |
-| data_cadastro | TIMESTAMP | Data de criação |
-| data_atualizacao | TIMESTAMP | Última atualização |
+## 🔌 API Endpoints
 
-### Relacionamentos
+Todas as rotas são prefixadas com `/api`.
 
+### Autenticação
+
+| Método | Rota | Descrição | Auth |
+|--------|------|-----------|------|
+| POST | `/auth/login` | Gera Token JWT para acesso | 🔓 Pública |
+
+### Empresas (Requer Master Key)
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/companies` | Lista todas as empresas |
+| POST | `/companies` | Cria nova empresa + Admin inicial (Transação) |
+| PATCH | `/companies/:id/status` | Alterna entre Ativo/Inativo |
+
+### Usuários (Requer JWT ou Master Key)
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/users` | Lista usuários (Filtra por empresa se não for Super Admin) |
+| POST | `/users` | Cria novo usuário na empresa logada |
+| DELETE | `/users/:id` | Remove usuário (Soft ou Hard delete conforme config) |
+
+---
+
+## 🚀 Instalação e Setup
+
+### 1. Configurar Variáveis de Ambiente
+
+Crie um arquivo `.env` na raiz:
+
+```properties
+PORT=3000
+
+# Conexão com Postgres (Docker Container)
+DATABASE_URL=postgres://admin_root:admin_password@localhost:5432/login_hub
+
+# Segredos
+JWT_SECRET=seu_segredo_jwt_super_seguro
+
+# Chave usada pelo Front-end (Super Admin) para gerenciar empresas
+MASTER_KEY='M?u@+Ok3@5ze6j1m:(w*Ras&b}{}s6()'
 ```
-empresas (1) ──── (N) usuarios
-niveis_acesso (1) ──── (N) usuarios
-```
 
-## 🚀 Instalação
+### 2. Inicializar Banco de Dados
 
-### Conectar ao PostgreSQL
-```bash
-psql -U postgres
-```
+Execute o script SQL abaixo no seu cliente Postgres ou via Docker:
 
-### Criar e Configurar o Database
+<details>
+<summary><strong>📄 Clique para ver o Script SQL Completo (Init.sql)</strong></summary>
 
 ```sql
 -- Criar database
 CREATE DATABASE login_hub;
-
--- Conectar ao database
 \c login_hub
 
 -- TABELA 1: EMPRESAS
@@ -127,12 +176,7 @@ CREATE TABLE usuarios (
     UNIQUE(empresa_id, email)
 );
 
--- ÍNDICES
-CREATE INDEX idx_usuarios_empresa ON usuarios(empresa_id);
-CREATE INDEX idx_usuarios_email ON usuarios(email);
-CREATE INDEX idx_empresas_documento ON empresas(documento);
-
--- FUNCTION E TRIGGERS
+-- FUNÇÃO E TRIGGERS (Auto Update Data)
 CREATE OR REPLACE FUNCTION atualizar_data_atualizacao()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -141,18 +185,37 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_atualizar_empresas
-    BEFORE UPDATE ON empresas
-    FOR EACH ROW
-    EXECUTE FUNCTION atualizar_data_atualizacao();
+CREATE TRIGGER trigger_atualizar_empresas 
+BEFORE UPDATE ON empresas 
+FOR EACH ROW EXECUTE FUNCTION atualizar_data_atualizacao();
 
-CREATE TRIGGER trigger_atualizar_usuarios
-    BEFORE UPDATE ON usuarios
-    FOR EACH ROW
-    EXECUTE FUNCTION atualizar_data_atualizacao();
+CREATE TRIGGER trigger_atualizar_usuarios 
+BEFORE UPDATE ON usuarios 
+FOR EACH ROW EXECUTE FUNCTION atualizar_data_atualizacao();
 
--- DADOS INICIAIS
-INSERT INTO niveis_acesso (nome, descricao) VALUES
-    ('admin', 'Administrador com acesso total'),
-    ('usuario', 'Usuário padrão com acesso limitado');
+-- SEED INICIAL
+INSERT INTO niveis_acesso (nome, descricao) 
+VALUES 
+    ('admin', 'Administrador'), 
+    ('usuario', 'Padrão');
 ```
+
+</details>
+
+### 3. Rodar o Projeto
+
+```bash
+# Instalar dependências
+npm install
+
+# Modo Desenvolvimento (Watch Mode)
+npm run dev
+
+# Build e Produção
+npm run build
+npm start
+```
+
+---
+
+**AWLSRV - Astral Wave Label 🤵🏻**
