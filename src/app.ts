@@ -1,25 +1,40 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import routes from './routes';
+import router from './routes';
 
 const app = express();
 
 // ==========================================
 // 1. Middlewares Globais
 // ==========================================
-app.use(helmet());       // Segurança: Proteção de headers HTTP
-app.use(cors());         // Segurança: Permite acesso do Frontend (React)
-app.use(express.json()); // Funcionalidade: Permite ler JSON no Body da requisição
+app.use(helmet());       
+app.use(cors());         
+app.use(express.json()); 
 
 // ==========================================
-// 2. Rotas
+// 2. Rota de Diagnóstico (Health Check)
 // ==========================================
-// Monta todas as rotas sob o prefixo '/api'
-// Resultado final das URLs:
-// - Health Check: GET /api/
-// - Login:        POST /api/auth/login
-// - Admin:        POST /api/admin/users
-app.use('/api', routes);
+app.get('/api', (req, res) => {
+    const isDocker = process.env.DB_HOST === 'awlsrvDB_postgres';
+    const hasMasterKey = !!(process.env.MASTER_KEY || process.env.MASTER_API_KEY);
+
+    res.json({ 
+        status: 'online',
+        service: 'AWLSRV LoginHub', 
+        version: '1.0.0',
+        environment: isDocker ? '🐳 Docker (Rede Cloudflare)' : '🍎 Mac / Local', 
+        db_target: process.env.DB_HOST,
+        security: {
+            master_key: hasMasterKey ? 'ATIVADA' : 'DESATIVADA'
+        },
+        timestamp: new Date().toISOString()
+    });
+});
+
+// ==========================================
+// 3. Demais Rotas
+// ==========================================
+app.use('/api', router);
 
 export default app;

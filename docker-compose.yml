@@ -1,54 +1,47 @@
 version: '3.8'
 
 services:
-  login-hub:
-    container_name: awlsrv_login_hub
+  login-hub-api:
+    container_name: awlsrv_login_hub_api
     build: .
     restart: always
-    
-    # Mapeamento de Portas
-    # O primeiro valor é a porta no Host (Servidor)
-    # O segundo é a porta interna no Container (Node.js)
-    ports:
-      - "${PORT:-3000}:${PORT:-3000}" 
-    
-    # 1. Carrega TODAS as variáveis do arquivo .env
-    # Isso traz: DB_PASS, JWT_SECRET, MASTER_API_KEY
-    env_file:
-      - .env
 
-    # 2. Sobrescreve configurações específicas para o DOCKER
+    # Mapeia porta apenas se quiser testar via IP local (ex: http://IP:3005)
+    # O tráfego real virá pelo Cloudflare via rede interna.
+    ports:
+      - "3005:3000"
+
+    # --- INJEÇÃO DE VARIÁVEIS DE AMBIENTE ---
+    # Aqui garantimos que o Node.js receba os valores corretos
     environment:
-      # --- O GATILHO DA LÓGICA (Ativa o modo LoginDocker) ---
-      - IS_DOCKER=true
-      
-      # Configuração de Ambiente
       - NODE_ENV=production
+      - TZ=America/Sao_Paulo
+      - PORT=3000
       
-      # Conexão de Banco (Rede Interna)
+      # Conexão de Banco (Forçando a rede interna Docker)
       - DB_HOST=awlsrvDB_postgres
       - DB_PORT=5432
-      # Forçamos o nome e usuário corretos para garantir integridade
       - DB_NAME=login_hub
       - DB_USER=admin_root
       
-      # Porta Interna do Node
-      - PORT=3000
+      # Segredos (Puxando do arquivo .env carregado abaixo)
+      - DB_PASS=${DB_PASS}
+      - JWT_SECRET=${JWT_SECRET}
+      - MASTER_KEY=${MASTER_KEY}
 
-    # 3. Monitoramento de Saúde (Health Check)
-    # Garante que o container reinicie se a API travar
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+    # Carrega o arquivo para ler os segredos (${DB_PASS}, etc)
+    env_file:
+      - .env
 
     networks:
       - awl_network
 
-# Definição de Rede
-# Assume que você já criou a rede: docker network create awl_network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:3000/api/auth/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 networks:
   awl_network:
     external: true

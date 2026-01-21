@@ -1,23 +1,22 @@
-# Imagem base leve do Node 20
 FROM node:20-alpine
 
-# Define diretório de trabalho
 WORKDIR /usr/src/app
 
-# 1. Copia apenas os arquivos de dependência primeiro (Cache Layering)
+# Copia dependências
 COPY package*.json ./
 
-# 2. Instala dependências (incluindo devDependencies para rodar o 'tsc')
-RUN npm install
+# Instalação limpa (CI)
+RUN npm ci
 
-# 3. Copia o restante do código fonte
-COPY . .
+# Copia configurações TS e código fonte
+COPY tsconfig.json ./
+COPY src ./src
 
-# 4. Executa o Build (TS -> JS na pasta dist)
+# Compila
 RUN npm run build
 
-# 5. Expõe a porta
+# Expõe a porta interna
 EXPOSE 3000
 
-# 6. Comando de inicialização (usa o script 'start' do package.json)
+# Inicia
 CMD ["npm", "start"]
