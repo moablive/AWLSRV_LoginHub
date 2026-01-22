@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import router from './routes';
+import { monitoringMiddleware, metricsEndpoint } from './middlewares/monitoring';
 
 const app = express();
 
@@ -12,8 +13,16 @@ app.use(helmet());
 app.use(cors());         
 app.use(express.json()); 
 
+// Prometheus medir o tempo de TODAS as rotas abaixo
+app.use(monitoringMiddleware);
+
 // ==========================================
-// 2. Rota de Diagnóstico (Health Check)
+// 2. Rota de Métricas (Prometheus Scrape)
+// ==========================================
+app.get('/metrics', metricsEndpoint);
+
+// ==========================================
+// 3. Rota de Diagnóstico (Health Check)
 // ==========================================
 app.get('/api', (req, res) => {
     const isDocker = process.env.DB_HOST === 'awlsrvDB_postgres';
@@ -25,6 +34,7 @@ app.get('/api', (req, res) => {
         version: '1.0.0',
         environment: isDocker ? '🐳 Docker (Rede Cloudflare)' : '🍎 Mac / Local', 
         db_target: process.env.DB_HOST,
+        monitoring: 'active 🟢',
         security: {
             master_key: hasMasterKey ? 'ATIVADA' : 'DESATIVADA'
         },
@@ -33,7 +43,7 @@ app.get('/api', (req, res) => {
 });
 
 // ==========================================
-// 3. Demais Rotas
+// 4. Demais Rotas
 // ==========================================
 app.use('/api', router);
 
