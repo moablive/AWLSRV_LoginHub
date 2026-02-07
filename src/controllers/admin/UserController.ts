@@ -51,7 +51,9 @@ export class UserController {
         try {
             const { id } = req.params;
 
-            if (!id || id.length < 30) {
+            // CORREÇÃO: Removemos a validação de tamanho (id.length < 30)
+            // Agora aceita IDs numéricos curtos do PostgreSQL
+            if (!id) {
                 return res.status(400).json({ error: 'ID inválido.' });
             }
 
@@ -107,7 +109,7 @@ export class UserController {
             }
 
             if (error.code === 'DUPLICATE_ENTRY' || error.code === '23505') {
-                return res.status(409).json({ 
+                return res.status(409).json({
                     error: 'Conflito de Dados',
                     message: error.message || 'E-mail já está em uso.'
                 });
