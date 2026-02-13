@@ -36,7 +36,7 @@ export const UsuarioQueries = {
             u.ultimo_acesso AS ultimo_login,
             na.nome as role
         FROM usuarios u
-        JOIN niveis_acesso na ON u.nivel_acesso_id = na.id
+        LEFT JOIN niveis_acesso na ON u.nivel_acesso_id = na.id
         WHERE u.empresa_id = $1
         ORDER BY u.nome ASC;
     `,
@@ -51,7 +51,7 @@ export const UsuarioQueries = {
             na.nome as role
         FROM usuarios u
         JOIN empresas e ON u.empresa_id = e.id
-        JOIN niveis_acesso na ON u.nivel_acesso_id = na.id
+        LEFT JOIN niveis_acesso na ON u.nivel_acesso_id = na.id
         ORDER BY u.data_cadastro DESC;
     `,
 

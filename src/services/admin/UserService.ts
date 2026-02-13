@@ -15,13 +15,23 @@ export class UserService {
         if (!data.email) throw Object.assign(new Error('E-mail é obrigatório'), { code: 'VALIDATION' });
         if (!data.password) throw Object.assign(new Error('Senha é obrigatória'), { code: 'VALIDATION' });
 
+        // Validação de Role (Correção do Bug de NULL)
+        const roleName = data.role || 'user';
+        const roleRes = await pool.query('SELECT id FROM niveis_acesso WHERE nome = $1', [roleName]);
+        
+        if (roleRes.rows.length === 0) {
+            throw Object.assign(new Error(`Nível de acesso '${roleName}' inválido.`), { code: 'VALIDATION' });
+        }
+        
+        const roleId = roleRes.rows[0].id;
+
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(data.password, salt);
 
         // Executa a query
         await pool.query(UsuarioQueries.CREATE, [
             data.empresa_id,
-            data.role || 'usuario',
+            roleId, // Passamos o ID validado diretamente
             data.nome || null,
             data.email,
             passwordHash,
